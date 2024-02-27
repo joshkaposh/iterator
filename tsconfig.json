@@ -18,9 +18,13 @@
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "noImplicitReturns": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "noImplicitOverride": true
     },
     "include": [
-        "src"
+        "src",
+    ],
+    "exclude": [
+        "__tests__"
     ]
 }

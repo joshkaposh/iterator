@@ -1,78 +1,66 @@
-import { ArrayIter } from './array-iter'
-import { GenIter } from './gen-iter'
+import { IterArrayLike, IterGenerator, IterIterable, IterObject } from "./common";
+import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, once, once_with, repeat, repeat_with } from "./double-ended-iterator";
+import { ExactSizeIterator, Iterator, successors } from "./iterator";
+import { is_arraylike, ErrorExt } from "./shared";
 
-export * from './types';
-export * from './array-iter';
-export * from './gen-iter';
+type DoubleEndedIteratorInputType<T = any> = ArrayLike<T> | DoubleEndedIterator<T>
+type IteratorInputType<T = any> = (() => Generator<T>) | Iterator<T> | IterableIterator<T>;
+type IterInputType<T = any> = DoubleEndedIteratorInputType<T> | IteratorInputType<T>;
 
-export type ArrayInputType<T = any> = T[] | ArrayIter<T>
-export type GenInputType<T = any> = (() => Generator<T>) | GenIter<T>;
-export type IterInputType<T = any> = ArrayInputType<T> | GenInputType<T>;
+type IteratorType<T> = Generator<T> | Iterator<T> | ExactSizeIterator<T>;
+type DoubleEndedIteratorType<T> = ArrayLike<T> | DoubleEndedIterator<T> | ExactSizeDoubleEndedIterator<T>;
+type IterType<T> = IteratorType<T> | DoubleEndedIteratorType<T>
 
-export type GenType<T> = Generator<T> | GenIter<T>;
-export type ArrayType<T> = T[] | ArrayIter<T>;
+type Iter<It> =
+    It extends DoubleEndedIteratorInputType<infer T> ?
+    It extends ExactSizeDoubleEndedIterator<T> | ArrayLike<T> ? ExactSizeDoubleEndedIterator<T> : DoubleEndedIterator<T> :
+    It extends IteratorInputType<infer T> ?
+    It extends ExactSizeIterator<T> ? ExactSizeIterator<T> : Iterator<T>
+    : never;
 
-export type IterType<T> = GenType<T> | ArrayType<T>
-
-type OnlyString<T> = T extends string ? T : never;
-type MethodKey<T, K = OnlyString<keyof T>> =
-    K extends keyof T ?
-    T[K] extends (...args: any[]) => any ? K :
-    never : never;
-
-type PropKey<T, K = OnlyString<keyof T>> =
-    K extends keyof T ?
-    K extends MethodKey<T, K> ? never :
-    K : never;
-
-type ExtractMethod<T> = {
-    [K in MethodKey<T, keyof T>]: T[K];
+type IntoIter<It> = {
+    into_iter(): It;
 }
 
-type ExtractProp<T> = {
-    [K in PropKey<T, keyof T>]: T[K];
-}
-
-export type IterProp<It> =
-    It extends ArrayType<infer T> ? ExtractProp<ArrayIter<T>> :
-    It extends GenType<infer T> ? ExtractProp<GenIter<T>> : never
-
-export type ArrayProp<T = any> = IterProp<ArrayIter<T>>
-export type GenProp<T = any> = IterProp<GenIter<T>>
-
-export type IterMethod<It> =
-    It extends ArrayType<infer T> ? ExtractMethod<ArrayIter<T>> :
-    It extends GenType<infer T> ? ExtractMethod<GenIter<T>> :
-    never;
-
-export type ArrayMethod<T = any> = IterMethod<ArrayInputType<T>>;
-export type GenMethod<T = any> = IterMethod<GenInputType<T>>;
-
-type ExcludePrivate<K extends PropertyKey> = Exclude<K, `__${string}` | 'get'>;
-type MissingArrayKey =
-    Exclude<ExcludePrivate<keyof ArrayMethod>, ExcludePrivate<keyof GenMethod>> |
-    Exclude<ExcludePrivate<keyof GenMethod>, ExcludePrivate<keyof ArrayMethod>>
-
-// type Missing
-type MissingKeyMap<K extends MissingArrayKey> = {
-    [P in K]: {
-        implementor: P extends keyof ArrayMethod ? GenIter<any> : ArrayIter<any>;
-        key: P;
+function iter<It extends IterInputType<any>>(iter: It): Iter<It> {
+    if (iter instanceof Iterator) {
+        return iter.into_iter() as Iter<It>;
+    } else if (is_arraylike(iter)) {
+        return new IterArrayLike(iter) as unknown as Iter<It>
+    } else if ('next' in iter) {
+        return new IterIterable(iter as any) as unknown as Iter<It>
+    } else if (typeof iter === 'function') {
+        return new IterGenerator(iter) as unknown as Iter<It>
+    } else if (typeof iter === 'object') {
+        console.warn('Unsafe', iter);
+        return new IterObject(iter as object) as unknown as Iter<It>;
     }
+    return undefined as unknown as Iter<It>;
 }
 
-type P = MissingKeyMap<MissingArrayKey>;
+iter.of = function <T>(...elements: T[]): DoubleEndedIterator<T> {
+    return new IterArrayLike(elements)
+}
 
-export type Iter<It> =
-    It extends (infer T)[] ? ArrayIter<T> :
-    It extends ArrayIter<any> ? It :
-    It extends GenIter<any> ? It :
-    It extends (() => Generator<infer T>) ? GenIter<T> :
-    never
+iter.once = once
+iter.once_with = once_with
+iter.successors = successors
+iter.repeat = repeat;
+iter.repeat_with = repeat_with
 
-export function iter<It extends IterInputType<any>>(it: It): Iter<It> {
-    if (Array.isArray(it) || it instanceof ArrayIter) {
-        return new ArrayIter(it) as Iter<It>;
-    }
-    return new GenIter(it) as Iter<It>;
+export type {
+    IntoIter,
+    Iter,
+    IterType,
+    IterInputType
+}
+
+export * from './iterator'
+export * from './double-ended-iterator';
+export * from './common';
+
+export {
+    iter,
+    is_arraylike,
+    ErrorExt,
 }
