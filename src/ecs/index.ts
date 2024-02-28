@@ -2,7 +2,7 @@ import { iter } from "../iter";
 import { Option } from "../option";
 import { Archetypes, archetype_id } from "./archetype";
 import { CommandQueue, Commands } from "./command";
-import { Query, QueryData } from "./query";
+import { Query, QueryData, QueryFilter } from "./query";
 import { Storage } from "./storage";
 import { Component, ComponentInfo } from './component'
 
@@ -95,11 +95,11 @@ export class World {
         this.#command_queue.dequeue()?.apply(this);
     }
 
-    query<const Q extends QueryData>(q: Q): Query<Q> {
-        return new Query(this, q, []);
+    query<const Q extends QueryData, const F extends QueryFilter<string, QueryData>>(q: Q, f: F = { type: '', data: [] as QueryData } as F): Query<Q, F> {
+        return new Query(this, q, f);
     }
 
-    query_filtered<const Q extends QueryData, const F extends QueryData>(q: Q, f: F): Query<Q, F> {
+    query_filtered<const Q extends QueryData, const F extends QueryFilter<string, QueryData>>(q: Q, f: F): Query<Q, F> {
         return new Query(this, q, f)
     }
 

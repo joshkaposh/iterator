@@ -1,6 +1,7 @@
-import { Item } from './iterator'
+import { Item, Iterator } from './iterator'
 import type { Result, Ok, Err, AsOption } from "../option";
 import { is_error } from '../option';
+import { IterInputType, iter } from '.';
 
 export type FoldFn<T, B, R = B> = (acc: B, x: T) => R
 export type CollectFn<T, It extends Iterable<T>> = <Into extends (iter: It) => any | undefined>(into?: Into) => HasArgument<typeof into, Into> extends 1 ? Into extends (...args: any) => infer R ? R : never : T[]
@@ -36,14 +37,25 @@ export function iter_item<T>(value: T): Next<T> {
     }
 }
 
-export function collect<It extends Iterable<any>>(iter: It, into?: undefined): Item<It>[];
-export function collect<It extends Iterable<any>, Into extends (iter: It) => any>(iter: It, into: Into): ReturnType<Into>;
-export function collect<It extends Iterable<any>, Into extends (iter: It) => any>(iter: It, into?: Into): ReturnType<Into> | Item<It>[] {
+export type IntoCollection<It extends IterInputType<any>> = (
+    (new (...args: any[]) => any) & { from(iter: It): any }
+)
+
+export type Collection<Coll extends IntoCollection<IterInputType<any>>> = Coll extends (new (...args: any[]) => any) & { from(iter: Iterable<any>): infer C } ? C : never;
+
+export function collect<T>(iter: IterInputType<T>, into?: undefined): T[];
+export function collect<T, I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(iter: IterInputType<T>, into: I): ReturnType<I['from']>
+export function collect<T, I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(iter: IterInputType<T>, into?: I): Collection<I> | T[]
+// export function collect<It extends IterInputType<any>>(it: It, into?: undefined): Item<It>[];
+// export function collect<It extends IterInputType<any>, Into extends IntoCollection<It>>(it: It, into: Into): Collection<Into>;
+export function collect<It extends IterInputType<any>, Into extends IntoCollection<It>>(it: It, into?: Into): Collection<Into> | Item<It>[] {
     if (into) {
-        return into(iter);
+        if ('from' in into) {
+            return into.from(it)
+        }
     }
 
-    return Array.from(iter)
+    return Array.from(iter(it))
 }
 
 export function unzip<K, V>(iter: IterableIterator<[K, V]>): [K[], V[]] {

@@ -1,4 +1,5 @@
-import { None, Option, is_none, is_some } from "./option";
+import { ErrorExt } from "./iter";
+import { Err, None, Option, Result, is_none, is_some } from "./option";
 
 export type Prettify<T> = { [K in keyof T]: T[K] } & {}
 
@@ -51,9 +52,25 @@ export class AssertError extends Error {
     }
 }
 
-export function assert(a: boolean) {
-    if (!a) {
-        throw new AssertError(`Assert failed`)
+export function assert(is_true: boolean): void
+export function assert(is_true: boolean, message: string): void;
+export function assert(is_true: boolean, message: string, a: unknown, b: unknown): void;
+export function assert(is_true: boolean, message?: string, a?: unknown, b?: unknown) {
+    const base = arguments.length === 4 ? `Assert failed on ${a} === ${b}` : 'Assert Failed';
+    if (!is_true) {
+        const msg = is_some(message) ? `${base} ${message}` : base
+        throw new AssertError(msg)
+    }
+}
+
+export function result<T, E>(fn: () => T, err: E): Result<T, Err<E>> {
+    let res = undefined;
+    try {
+        res = fn()
+    } catch (e) {
+        res = new ErrorExt(err);
+    } finally {
+        return res as Result<T, Err>
     }
 }
 

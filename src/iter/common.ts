@@ -1,8 +1,8 @@
 
 import { Iterator } from "./iterator";
 import { ExactSizeDoubleEndedIterator } from './double-ended-iterator'
-import { IterResult, NonZeroUsize, done, iter_item, non_zero_usize } from "./shared";
-import { Result, is_some } from "../option";
+import { type IterResult, NonZeroUsize, done, iter_item, non_zero_usize } from "./shared";
+import { type Result, is_some } from "../option";
 
 export class IterIterable<T> extends Iterator<T> {
     __iterable: IterableIterator<T>
@@ -85,6 +85,89 @@ export class IterArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
     }
 
     override into_iter(): IterArrayLike<T> {
+        this.#index = -1;
+        this.#back_index = this.#iterable.length;
+        return this;
+    }
+
+    override size_hint(): [number, number] {
+        return [0, this.#iterable.length]
+    }
+
+    override count(): number {
+        return this.len();
+    }
+
+    override len(): number {
+        if (this.#back_index <= this.#index) {
+            return 0;
+        }
+
+        return this.#back_index - this.#index - 1;
+    }
+}
+
+export type MutFn<T> = (fn: (value: T) => T) => T
+
+export class IterMut<T> extends ExactSizeDoubleEndedIterator<[number, T]> {
+    #iterable: ArrayLike<T>;
+    #index: number;
+    #back_index: number;
+
+    constructor(iterable: ArrayLike<T>) {
+        super()
+        this.#iterable = iterable;
+        this.#index = -1;
+        this.#back_index = iterable.length;
+    }
+
+    set(i: number, value: T) {
+        // @ts-expect-error
+        this.#iterable[i] = value;
+        console.log(this.#iterable[i]);
+
+    }
+
+    next(): IterResult<[number, T]> {
+        this.#index++;
+        if (this.#index >= this.#back_index) {
+            return done();
+        }
+        const item = this.#iterable[this.#index]
+
+        return is_some(item) ? iter_item([this.#index, item] as [number, T]) : done();
+    }
+
+    next_back(): IterResult<[number, T]> {
+        this.#back_index--;
+        if (this.#back_index <= this.#index) {
+            return done();
+        }
+        const item = this.#iterable[this.#back_index]
+        return is_some(item) ? iter_item([this.#back_index, item] as [number, T]) : done();
+    }
+
+    override advance_by(n: number): Result<undefined, NonZeroUsize> {
+        if (n === 0) {
+            return;
+        }
+        const m = this.#index + n;
+
+        this.#index = m;
+        return non_zero_usize(this.len() - m)
+    }
+
+    override advance_back_by(n: number): Result<undefined, NonZeroUsize> {
+        if (n === 0) {
+            return;
+        }
+        const m = this.#back_index - n;
+
+        this.#back_index = m;
+        return non_zero_usize(this.len() - m)
+    }
+
+    override into_iter(): IterMut<T> {
         this.#index = -1;
         this.#back_index = this.#iterable.length;
         return this;

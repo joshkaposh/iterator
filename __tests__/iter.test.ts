@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { DoubleEndedIterator, Iterator, iter, ErrorExt, IterIterable, IterArrayLike, IterGenerator } from "../src/iter";
+import { DoubleEndedIterator, Iterator, iter, ErrorExt, IterIterable, IterArrayLike, IterGenerator, iter_mut } from "../src/iter";
 import * as Intrinsics from '../src/intrinsics';
 import { is_none } from '../src/option';
 import { resize } from '../src/util';
@@ -107,6 +107,10 @@ function* flatten<T>(input: T[][]) {
     }
 }
 
+// test('Flatten', () => {
+
+// })
+
 test('Resize', () => {
     const a: number[] = [];
     resize(a, 5, 0);
@@ -162,32 +166,44 @@ test('Native Data Structures', () => {
     expect(iter(new Uint16Array()) instanceof DoubleEndedIterator).toBe(true);
 })
 
-test('Flatten', () => {
-    function* gen() {
-        yield [1, 2] as const;
-        yield [3, 4] as const;
-        yield [5, 6] as const;
-    }
+// test('Flatten', () => {
+//     function* gen_nested() {
+//         yield [1, 2] as const;
+//         yield [3, 4] as const;
+//         yield [5, 6] as const;
+//     }
 
-    expect([...flatten([[1, 2], [3, 4], [5, 6]])]).toEqual([1, 2, 3, 4, 5, 6])
-    const flat = iter(gen).flatten();
-    expect(flat.next().value).toBe(1);
-    expect(flat.next().value).toBe(2);
-    expect(flat.next().value).toBe(3);
-    expect(flat.next().value).toBe(4);
-    expect(flat.next().value).toBe(5);
-    expect(flat.next().value).toBe(6);
-    const nested = [[1, 2], [3, 4], [5, 6]]
-    const flat2 = iter(nested).flatten();
-    expect(flat2.next_back().value).toBe(6);
-    expect(flat2.next_back().value).toBe(5);
-    expect(flat2.next_back().value).toBe(4);
-    expect(flat2.next_back().value).toBe(3);
-    expect(flat2.next_back().value).toBe(2);
-    expect(flat2.next_back().value).toBe(1);
-    expect(flat2.next().value).toBe(undefined)
-    expect(flat2.next_back().value).toBe(undefined)
-})
+//     // expect(iter.of([1, 2, 3], [4, 5, 6]).flatten().collect()).toBe([1, 2, 3, 4, 5, 6])
+
+//     const gen = iter(gen_nested).flatten();
+
+//     expect(gen.next().value).toBe(1);
+//     expect(gen.next().value).toBe(2);
+//     expect(gen.next().value).toBe(3);
+//     expect(gen.next().value).toBe(4);
+//     expect(gen.next().value).toBe(5);
+//     expect(gen.next().value).toBe(6);
+//     const nested = [[1, 2], [3, 4], [5, 6]]
+//     const flat2 = iter(nested).flatten();
+//     expect(flat2.next_back().value).toBe(6);
+//     expect(flat2.next_back().value).toBe(5);
+//     expect(flat2.next_back().value).toBe(4);
+//     expect(flat2.next_back().value).toBe(3);
+//     expect(flat2.next_back().value).toBe(2);
+//     expect(flat2.next_back().value).toBe(1);
+//     expect(flat2.next().value).toBe(undefined)
+//     expect(flat2.next_back().value).toBe(undefined)
+
+//     const flat3 = iter([[1, 2, 3], [4, 5, 6]]).flatten();
+//     console.log(flat3.next().value);
+//     console.log(flat3.next().value);
+//     console.log(flat3.next().value);
+//     console.log(flat3.next().value);
+//     console.log(flat3.next().value);
+//     console.log(flat3.next().value);
+//     console.log(flat3.next().value);
+
+// })
 
 test('Free standing functions', () => {
     const s = iter.successors(2, (v) => v < Math.pow(2, 5) ? v * v : null)

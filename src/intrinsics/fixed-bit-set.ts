@@ -1,5 +1,5 @@
 import { Bit } from ".";
-import { Iterator, Range, iter, range } from "../iter";
+import { type IterInputType, Iterator, Range, iter, range } from "../iter";
 import { IterResult, done } from "../iter/shared";
 import { is_some } from "../option";
 import { assert, resize, split_first } from "../util";
@@ -12,7 +12,7 @@ type u32 = number;
 type usize = number;
 type Block = u32;
 
-export function div_rem(x: usize, d: usize): [usize, usize] {
+function div_rem(x: usize, d: usize): [usize, usize] {
     return [Math.floor(x / d), Math.floor(x % d)];
 }
 
@@ -20,9 +20,88 @@ export class FixedBitSet {
     #data: Block[];
     #length: usize;
 
+    format(type: 'b' | '#b' = 'b') {
+        let bstring = type === '#b' ? '0b' : '';
+        for (let i = 0; i < this.len(); i++) {
+            // @ts-expect-error;
+            bstring += this.contains(i) * 1;
+        }
+        return bstring;
+    }
+
+    toString(type?: '#') {
+        if (!type) {
+            return this.format()
+        }
+        return this.format('#b')
+    }
+
     constructor(data: Block[] = [], length: usize = 0) {
         this.#data = data;
         this.#length = length;
+    }
+
+    static from(src: IterInputType<usize>) {
+        const fb = FixedBitSet.with_capacity(0);
+        fb.extend(src);
+        return fb;
+    }
+
+    static and(a: FixedBitSet, b: FixedBitSet): FixedBitSet {
+        const [short, long] = a.len() <= b.len() ?
+            [a.#data, b.#data] :
+            [b.#data, a.#data]
+        const data = Array.from(short, (k, i) => k & long[i])
+        const len = Math.min(a.len(), b.len())
+        return new FixedBitSet(data, len);
+    }
+
+    and(other: FixedBitSet) {
+        const l = other.len()
+        for (let i = 0; i < l; i++) {
+            if (!is_some(this.#data[i])) {
+                break;
+            }
+            this.#data[i] &= other.#data[i]
+        }
+    }
+
+    static or(a: FixedBitSet, b: FixedBitSet): FixedBitSet {
+        const [short, long] = a.len() <= b.len() ?
+            [a.#data, b.#data] :
+            [b.#data, a.#data]
+        const data = Array.from(short, (k, i) => k | long[i])
+        const len = Math.max(a.len(), b.len())
+        return new FixedBitSet(data, len);
+    }
+
+    or(other: FixedBitSet) {
+        const len = other.len()
+        if (this.#data.length < len) {
+            this.grow(len);
+        }
+        for (let i = 0; i < len; i++) {
+            this.#data[i] |= other.#data[i]
+        }
+    }
+
+    static xor(a: FixedBitSet, b: FixedBitSet): FixedBitSet {
+        const [short, long] = a.len() <= b.len() ?
+            [a.#data, b.#data] :
+            [b.#data, a.#data]
+        const data = Array.from(short, (k, i) => k ^ long[i])
+        const len = Math.max(a.len(), b.len())
+        return new FixedBitSet(data, len);
+    }
+
+    xor(other: FixedBitSet) {
+        const len = other.len()
+        if (this.#data.length < len) {
+            this.grow(len);
+        }
+        for (let i = 0; i < len; i++) {
+            this.#data[i] ^= other.#data[i]
+        }
     }
 
     static with_capacity(bits: usize) {
@@ -47,6 +126,32 @@ export class FixedBitSet {
             data[block] &= !mask;
         }
         return new FixedBitSet(data, bits)
+    }
+
+    eq(other: FixedBitSet) {
+        for (let i = 0; i < this.#data.length; i++) {
+            if (!is_some(other.#data[i])) {
+                break;
+            }
+            if (this.#data[i] != other.#data[i]) {
+                return false
+            }
+        }
+        return true
+    }
+
+    extend(src: IterInputType<usize>) {
+        const it = iter(src)
+        for (const i of it) {
+            if (i >= this.len()) {
+                this.grow(i + 1)
+            }
+            this.put(i);
+        }
+    }
+
+    clone() {
+        return new FixedBitSet(structuredClone(this.#data), this.len())
     }
 
     grow(bits: usize) {
@@ -82,7 +187,6 @@ export class FixedBitSet {
             return false
         }
         return (b & (1 << i)) !== 0
-        // return ((bit >> i) & 1) !== 0;
     }
 
     clear() {
@@ -182,6 +286,19 @@ export class FixedBitSet {
         return new Intersection(this.ones(), other)
     }
 
+    // in-place intersection of two 'FixedBitSet's;
+    // 'self's capacity will remain the same
+    intersect_with(other: FixedBitSet) {
+        const l = this.#data.length;
+        for (let i = 0; i < l; i++) {
+            this.#data[i] &= other.#data[i];
+        }
+        let mn = Math.min(this.#data.length, other.#data.length);
+        for (let i = mn; i < this.#data.length; i++) {
+            this.#data[i] = 0;
+        }
+    }
+
     union(other: FixedBitSet) {
         return new Union(this.ones().chain(other.difference(this)))
     }
@@ -190,8 +307,30 @@ export class FixedBitSet {
         return new Difference(this.ones(), other);
     }
 
+    // in-place difference of two 'FixedBitSet's;
+    // 'self's capacity will remain the same
+    difference_with(other: FixedBitSet) {
+        const l = this.#data.length;
+        for (let i = 0; i < l; i++) {
+            // @ts-expect-error;
+            this.#data[i] &= !other.#data[i];
+        }
+    }
+
     symmetric_difference(other: FixedBitSet) {
         return new SymmetricDifference(this.difference(other).chain(other.difference(this)))
+    }
+
+    // in-place symmetric difference of two 'FixedBitSet's;
+    // 'self's capacity may be increased to match 'other's
+    symmetric_difference_with(other: FixedBitSet) {
+        if (other.len() >= this.len()) {
+            this.grow(other.len())
+        }
+        const m = Math.max(this.#data.length, other.#data.length)
+        for (let i = 0; i < m; i++) {
+            this.#data[i] ^= other.#data[i];
+        }
     }
 
     union_with(other: FixedBitSet) {
@@ -223,7 +362,11 @@ export class FixedBitSet {
     is_superset(other: FixedBitSet) {
         return other.is_subset(this)
     }
+    [Symbol.iterator]() {
+        return this.#data[Symbol.iterator]();
+    }
 }
+
 class Difference extends Iterator<number> {
     #iter: Ones;
     #other: FixedBitSet;
@@ -310,20 +453,13 @@ class Union extends Iterator<number> {
     }
 }
 
-export function debug(start: number, end: number, len: number) {
-    start = start ?? 0;
-    end = end ?? len;
+function new_mask(start: number, end: number) {
     const [first_block, first_rem] = div_rem(start, BITS);
     const [last_block, last_rem] = div_rem(end, BITS);
-    console.log('START = (%d, %d, %d, %d)', first_block, first_rem, last_block, last_rem);
 
     const a = carrot_left(Intrinsics.u32.MAX, 1);
     const b = BITS - last_rem - 1;
     const c = carrot_left(a, b);
-
-    console.log('A = %d', a);
-    console.log('B = %d', b);
-    console.log('C = %d', c);
 
     return [
         first_block,
@@ -345,12 +481,12 @@ export class Masks extends Iterator<[usize, Block]> {
         const end = range.end ?? len;
 
         assert(start <= end && end <= len);
-        const [first_block, first_mask, last_block, last_mask] = debug(start, end, len)
+        const [first_block, first_mask, last_block, last_mask] = new_mask(start, end)
         this.#first_block = first_block;
         this.#first_mask = first_mask;
         this.#last_block = last_block;
         this.#last_mask = last_mask;
-        console.log('MASKS = (%d, %d, %d), (%d, %d, %d, %d)', start, end, len, this.#first_block, this.#first_mask, this.#last_block, this.#last_mask);
+        // console.log('MASKS = (%d, %d, %d), (%d, %d, %d, %d)', start, end, len, this.#first_block, this.#first_mask, this.#last_block, this.#last_mask);
 
     }
 
@@ -359,14 +495,14 @@ export class Masks extends Iterator<[usize, Block]> {
     }
 
     override next(): IterResult<[usize, Block]> {
-        console.log('MASKS: NEXT', this.#first_block, this.#first_mask, this.#last_block, this.#last_mask);
+        // console.log('MASKS: NEXT', this.#first_block, this.#first_mask, this.#last_block, this.#last_mask);
 
         if (this.#first_block < this.#last_block) {
             const res = [this.#first_block, this.#first_mask] as [usize, Block];
             this.#first_block += 1;
             // @ts-expect-error
             this.#first_mask = !0;
-            console.log('MASKS: BEFORE RETURN', this.#first_block, this.#first_mask, this.#last_block, this.#last_mask);
+            // console.log('MASKS: BEFORE RETURN', this.#first_block, this.#first_mask, this.#last_block, this.#last_mask);
 
             return { done: false, value: res }
 
@@ -374,7 +510,7 @@ export class Masks extends Iterator<[usize, Block]> {
             const mask = this.#first_mask & this.#last_mask;
             const res = mask === 0 ? done() : { done: false, value: [this.#first_block, mask] }
             this.#first_block += 1;
-            console.log('MASKS: BEFORE RETURN', this.#first_block, this.#first_mask, this.#last_block, this.#last_mask);
+            // console.log('MASKS: BEFORE RETURN', this.#first_block, this.#first_mask, this.#last_block, this.#last_mask);
             return res as IterResult<[usize, Block]>
         } else {
             return done();

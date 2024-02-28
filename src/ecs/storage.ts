@@ -3,7 +3,7 @@ import { Bit } from "../intrinsics";
 import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, iter } from "../iter";
 import { type Option, is_some } from "../option";
 import type { ArchetypeId } from "./archetype";
-import { Entity } from "./entity";
+import { Entity, EntityId } from "./entity";
 import { GenKey, GenerationalArray } from "./generational-array";
 
 export type TableId = number;
@@ -54,6 +54,15 @@ export class Column<T = {}> {
     }
 }
 
+
+export function table_row(table: Table, entity_id: EntityId, component_ids: ComponentId[]) {
+    return Array.from({ length: component_ids.length }, (_, i) => table.get_column(component_ids[i])!.get_unsafe(entity_id))
+}
+
+export type TableRow = ReturnType<typeof table_row>;
+
+// TODO: implement 'TableRow'
+// export type TableRow = {};
 // TODO: implement 'generational array'
 export class Table {
     #table: Record<ComponentId, Column> = {}
@@ -62,6 +71,10 @@ export class Table {
     constructor(table_id: TableId, archetype_id: ArchetypeId) {
         this.#id = table_id;
         this.#archetype_id = archetype_id;
+    }
+
+    column_count(): number {
+        return Object.keys(this.#table).length;
     }
 
     archetype_id(): ArchetypeId {
@@ -113,7 +126,7 @@ export class Table {
     }
 
     component_count(): number {
-        return this.iter().map(c => c.len()).sum();
+        return this.entity_count() * this.column_count();
     }
 
     entity_capacity(): number {

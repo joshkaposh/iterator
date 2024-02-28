@@ -1,8 +1,8 @@
-import { Component, ComponentId, World } from ".";
+import { ComponentId } from ".";
 import { Bit } from "../intrinsics";
 import { iter, Iterator } from "../iter";
 import type { Option } from "../option";
-import type { Table, TableId } from "./storage";
+import type { TableId } from "./storage";
 
 export type ArchetypeId = number;
 
@@ -14,7 +14,7 @@ export class Archetype {
     #id: ArchetypeId;
     #table_id: TableId;
     #component_ids: ComponentId[]
-    constructor(table_id: TableId, ids: ArchetypeId[], id = archetype_id(ids)) {
+    constructor(table_id: TableId, ids: ComponentId[], id: ArchetypeId = archetype_id(ids)) {
         this.#id = id;
         this.#table_id = table_id;
         this.#component_ids = ids;
@@ -38,7 +38,7 @@ export class Archetype {
 
 export class Archetypes {
     #archetypes: Map<ArchetypeId, Archetype> = new Map();
-    #generation = 0;
+    // #generation = 0;
 
     generation(): number {
         return 0

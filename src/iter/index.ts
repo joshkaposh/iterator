@@ -1,6 +1,6 @@
-import { IterArrayLike, IterGenerator, IterIterable, IterObject } from "./common";
+import { IterArrayLike, IterGenerator, IterIterable, IterMut } from "./common";
 import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, once, once_with, repeat, repeat_with } from "./double-ended-iterator";
-import { ExactSizeIterator, Iterator, successors } from "./iterator";
+import { ExactSizeIterator, Item, Iterator, successors } from "./iterator";
 import { is_arraylike, ErrorExt } from "./shared";
 
 type DoubleEndedIteratorInputType<T = any> = ArrayLike<T> | DoubleEndedIterator<T>
@@ -27,26 +27,28 @@ function iter<It extends IterInputType<any>>(iter: It): Iter<It> {
         return iter.into_iter() as Iter<It>;
     } else if (is_arraylike(iter)) {
         return new IterArrayLike(iter) as unknown as Iter<It>
-    } else if ('next' in iter) {
+    } else if (iter && 'next' in iter) {
         return new IterIterable(iter as any) as unknown as Iter<It>
     } else if (typeof iter === 'function') {
         return new IterGenerator(iter) as unknown as Iter<It>
-    } else if (typeof iter === 'object') {
-        console.warn('Unsafe', iter);
-        return new IterObject(iter as object) as unknown as Iter<It>;
+    } else {
+        throw new Error(`Cannot construct Iterator from ${iter}`)
     }
-    return undefined as unknown as Iter<It>;
 }
 
-iter.of = function <T>(...elements: T[]): DoubleEndedIterator<T> {
+iter.of = function <T>(...elements: T[]): ExactSizeDoubleEndedIterator<T> {
     return new IterArrayLike(elements)
 }
 
-iter.once = once
-iter.once_with = once_with
-iter.successors = successors
+iter.once = once;
+iter.once_with = once_with;
+iter.successors = successors;
 iter.repeat = repeat;
-iter.repeat_with = repeat_with
+iter.repeat_with = repeat_with;
+
+export function iter_mut<It extends ArrayLike<any>>(it: It): IterMut<Item<It>> {
+    return new IterMut(it)
+}
 
 export type {
     IntoIter,

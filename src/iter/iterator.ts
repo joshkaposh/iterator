@@ -2,7 +2,7 @@ import { iter } from ".";
 import * as Intrinsics from "../intrinsics";
 import { Err, Ok, Option, Result, is_error, is_some } from "../option";
 import { MustReturn, TODO } from "../util";
-import { ErrorExt, FoldFn, IterResult, NonZeroUsize, collect, done, iter_item, non_zero_usize, unzip } from "./shared";
+import { Collection, ErrorExt, FoldFn, IntoCollection, IterResult, NonZeroUsize, collect, done, iter_item, non_zero_usize, unzip } from "./shared";
 
 export type Item<It> =
     It extends Iterable<infer T> ? T :
@@ -49,10 +49,10 @@ export abstract class Iterator<T> {
         return new Chain(this, other)
     }
 
-    collect(into?: undefined): T[]
-    collect(into: (iter: this) => any): ReturnType<typeof into>;
-    collect(into?: (iter: this) => any): typeof into extends (iter: this) => any ? ReturnType<typeof into> : T[] {
-        return collect(this, into as any)
+    collect(into?: undefined): T[];
+    collect<I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(into: I): ReturnType<I['from']>
+    collect<I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(into?: I): Collection<I> | T[] {
+        return collect(this, into as I)
     }
 
     count() {
@@ -113,6 +113,10 @@ export abstract class Iterator<T> {
         for (const item of this.into_iter()) {
             callback(item);
         }
+    }
+
+    fuse(): Iterator<T> {
+        return new FusedIterator(this);
     }
 
     inspect(callback: (value: T) => void): Iterator<T> {
