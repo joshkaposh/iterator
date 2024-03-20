@@ -392,7 +392,6 @@ test('union', () => {
     expect(a.eq(ab)).toBe(true)
 })
 
-
 test('symmetric_difference', () => {
     const a_len = 83;
     const b_len = 151;
@@ -420,7 +419,6 @@ test('symmetric_difference', () => {
     a.symmetric_difference_with(b);
     expect(a_sym_diff_b.eq(a))
 })
-
 
 test('bitor_equal_length', () => {
     const len = 109;

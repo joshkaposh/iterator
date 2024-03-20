@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { DoubleEndedIterator, Iterator, iter, ErrorExt, IterIterable, IterArrayLike, IterGenerator, iter_mut } from "../src/iter";
+import { DoubleEndedIterator, Iterator, iter, ErrorExt, IterIterable, IterGenerator } from "../src/iter";
 import * as Intrinsics from '../src/intrinsics';
 import { is_none } from '../src/option';
 import { resize } from '../src/util';
@@ -107,9 +107,74 @@ function* flatten<T>(input: T[][]) {
     }
 }
 
-// test('Flatten', () => {
+test('Flatten', () => {
+    const none = [];
+    const empty = [[], []];
+    const two_wide = [[1, 2], [3, 4], [5, 6]];
+    const three_wide = [[1, 2, 3], [4, 5, 6]];
+    const really_wide = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [11, 12, 13, 14, 15]];
 
-// })
+
+    const expected = [1, 2, 3, 4, 5, 6];
+    const rev = structuredClone(expected).reverse()
+
+
+    const long = Array.from({ length: 10 }, (_) => Array.from({ length: 10 }, (_, i) => i + 1))
+    const expected_long = [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+    ]
+    console.log(iter(two_wide).flatten().collect());
+
+    expect(iter(two_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
+    expect(iter(three_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
+    expect(iter(long).flatten().collect()).toEqual(expected_long)
+    expect(iter(three_wide).flatten().rev().collect()).toEqual(rev)
+
+    const flat = iter(three_wide).flatten().rev();
+    expect(flat.next().value).toBe(6);
+    expect(flat.next_back().value).toBe(1);
+    expect(flat.next().value).toBe(5);
+    expect(flat.next_back().value).toBe(2);
+    expect(flat.next().value).toBe(4);
+    expect(flat.next_back().value).toBe(3);
+    expect(flat.next().value).toBe(undefined);
+
+
+    const f = iter([['a1', 'a2', 'a3'], ['b1', 'b2', 'b3']]).flatten();
+
+    expect(f.next().value).toBe('a1');
+    expect(f.next_back().value).toBe('b3');
+    expect(f.next().value).toBe('a2');
+    expect(f.next().value).toBe('a3');
+    expect(f.next().value).toBe('b1');
+    expect(f.next_back().value).toBe('b2');
+    expect(f.next().value).toBe(undefined);
+    expect(f.next_back().value).toBe(undefined);
+
+    // const flat_long = iter(really_wide).flatten().rev();
+    // expect(flat_long.next().value).toBe(15);
+    // expect(flat_long.next().value).toBe(14);
+    // expect(flat_long.next().value).toBe(13);
+    // expect(flat_long.next().value).toBe(12);
+    // expect(flat_long.next().value).toBe(11);
+    // expect(flat_long.next().value).toBe(10);
+    // expect(flat_long.next_back().value).toBe(1);
+    // expect(flat_long.next_back().value).toBe(2);
+    // expect(flat_long.next_back().value).toBe(3);
+    // expect(flat_long.next_back().value).toBe(4);
+    // expect(flat_long.next_back().value).toBe(5);
+    // expect(flat_long.next().value).toBe(undefined)
+    // expect(flat_long.next_back().value).toBe(undefined)
+})
 
 test('Resize', () => {
     const a: number[] = [];
@@ -509,7 +574,7 @@ test('Iter', () => {
         yield 'v2';
         yield 'v3';
     }))
-
+    expect(iter()).toBe(undefined)
     expect(z.last()).toEqual([81, 'v3'])
     expect(zg.last()).toEqual([81, 'v3'])
 })

@@ -1,38 +1,33 @@
-import type { ComponentId } from ".";
+import type { Component, ComponentId, QueryData, QueryResult, World } from ".";
 import { Bit } from "../intrinsics";
-import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, iter } from "../iter";
+import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, iter, range } from "../iter";
 import { type Option, is_some } from "../option";
 import type { ArchetypeId } from "./archetype";
+import { swap_remove } from "./array-helpers";
 import { Entity, EntityId } from "./entity";
 import { GenKey, GenerationalArray } from "./generational-array";
 
 export type TableId = number;
 export type ColumnId = number;
-export type Entities = DoubleEndedIterator<Entity>
+export type Entities = DoubleEndedIterator<{}[]>
+
+// if ordering of the elements dont matter, 
+// you can swap 'i' with last element and then pop()
+
+
 
 export class Column<T = {}> {
     #data: T[] = [];
-    #data2: GenerationalArray<T> = new GenerationalArray();
     len(): number {
         return this.#data.length;
     }
-
-    get_unsafe_gen(i: GenKey) {
-        return this.#data2.get(i)
-    }
-
-    remove_gen(i: GenKey) {
-        this.#data2.remove(i);
-    }
-
-    resize_gen() { }
 
     get_unsafe(i: number): T {
         return this.#data[i];
     }
 
-    remove(i: number) {
-        this.#data.splice(i, 1);
+    swap_remove(i: number) {
+        swap_remove(this.#data, i)
     }
 
     resize(len: number) {
@@ -54,15 +49,10 @@ export class Column<T = {}> {
     }
 }
 
+export type TableRow = {}[];
+export type ArchetypeRow = DoubleEndedIterator<Column>
 
-export function table_row(table: Table, entity_id: EntityId, component_ids: ComponentId[]) {
-    return Array.from({ length: component_ids.length }, (_, i) => table.get_column(component_ids[i])!.get_unsafe(entity_id))
-}
 
-export type TableRow = ReturnType<typeof table_row>;
-
-// TODO: implement 'TableRow'
-// export type TableRow = {};
 // TODO: implement 'generational array'
 export class Table {
     #table: Record<ComponentId, Column> = {}
@@ -73,44 +63,41 @@ export class Table {
         this.#archetype_id = archetype_id;
     }
 
-    column_count(): number {
-        return Object.keys(this.#table).length;
-    }
-
     archetype_id(): ArchetypeId {
         return this.#archetype_id;
     }
 
+    entity_refs(archetype_id?: Option<ArchetypeId>) {
+        return is_some(archetype_id) ?
+            iter(range(0, this.entity_count())).map(i => this.entity_ref(i, this.#columns_from_archetype(archetype_id))) :
+            iter(range(0, this.entity_count())).map(i => this.entity_ref(i, this.iter()))
+
+    }
+
     entities(archetype_id?: Option<ArchetypeId>): Entities {
-        if (is_some(archetype_id)) {
-            return this.#iter_columns(archetype_id);
-        }
-        return iter(Array.from({ length: this.entity_count() }, (_, idx) => idx)).map(id => this.iter().fold(new Entity({ index: id, generation: 0 }, this), (ent, col) => {
-            ent.insert_component(col.get_unsafe(id))
-            return ent
-        }))
+        return is_some(archetype_id) ?
+            iter(range(0, this.entity_count())).map(i => this.entity(i, this.#columns_from_archetype(archetype_id))) as Entities :
+            iter(range(0, this.entity_count())).map(i => this.entity(i, this.iter())) as Entities
     }
 
-    id(): TableId {
-        return this.#id;
+    entity_count(): number {
+        return Object.values(this.#table)[0].len();
     }
 
-    is_superset(table: Table) {
-        return table.is_subset(this.#archetype_id);
+    entity_capacity(): number {
+        return 0;
     }
 
-    is_subset(archetype_id: ArchetypeId) {
-        return Bit.subset(this.component_ids(), archetype_id)
+    column_count(): number {
+        return Object.keys(this.#table).length;
+    }
+
+    component_count(): number {
+        return this.entity_count() * this.column_count();
     }
 
     component_ids() {
         return iter(Object.keys(this.#table)).map(v => Number(v))
-    }
-
-    insert_column(component_id: ComponentId) {
-        const column = new Column();
-        this.#table[component_id] = column;
-        return column;
     }
 
     get_column(component_id: ComponentId): Option<Column> {
@@ -121,40 +108,69 @@ export class Table {
         return is_some(this.#table[component_id]);
     }
 
-    entity_count(): number {
-        return Object.values(this.#table)[0].len();
+    reserve(additional_capacity: number) {
+        this.iter().for_each(col => col.reserve(additional_capacity));
     }
 
-    component_count(): number {
-        return this.entity_count() * this.column_count();
+    resize(len: number) {
+        this.iter().for_each(col => col.resize(len));
     }
 
-    entity_capacity(): number {
-        return 0;
+    id(): TableId {
+        return this.#id;
+    }
+
+    insert_columns(components_ids: ComponentId[]) {
+        components_ids.forEach(id => {
+            const column = new Column();
+            this.#table[id] = column;
+        })
+    }
+
+    insert_column(component_id: ComponentId) {
+        const column = new Column();
+        this.#table[component_id] = column;
+        return column;
+    }
+
+    insert_row(i: number, row: InstanceType<Component>[], world: World) {
+        row.forEach(comp => {
+            const id = world.component_id(comp);
+            this.get_column(id)?.insert(i, comp);
+        })
     }
 
     is_empty(): boolean {
         return this.entity_count() === 0;
     }
 
+    is_superset(table: Table) {
+        return table.is_subset(this.#archetype_id);
+    }
+
+    is_subset(archetype_id: ArchetypeId) {
+        return Bit.subset(this.component_ids(), archetype_id)
+    }
+
     iter(): ExactSizeDoubleEndedIterator<Column> {
         return iter(Object.values(this.#table));
     }
 
-    #iter_filter_columns(archetype_id: ArchetypeId) {
-        return this.component_ids()
-            .filter(id => Bit.check(archetype_id, id))
-            .map(id => this.get_column(id)!)
+    entity_ref(i: EntityId, cols: DoubleEndedIterator<Column>): Entity<QueryData> {
+        return new Entity(this, this.entity(i, cols) as unknown as QueryResult<QueryData>, i);
     }
 
-    #iter_columns(archetype_id?: Option<ArchetypeId>): Entities {
-        const columns = is_some(archetype_id) ? this.#iter_filter_columns(archetype_id) : this.iter();
+    entity(i: EntityId, cols: DoubleEndedIterator<Column>): {}[] {
+        return cols.fold([] as {}[], (acc, x) => {
+            acc.push(x.get_unsafe(i))
+            return acc;
+        })
+    }
 
-        return iter(Array.from({ length: this.entity_count() }, (_, i) => i))
-            .map(i => columns.fold(new Entity({ index: i, generation: 0 }, this), (acc, x) => {
-                acc.insert_component(x.get_unsafe(i))
-                return acc;
-            }))
+    #columns_from_archetype(archetype_id: ArchetypeId) {
+        return this.component_ids()
+            .filter(id => Bit.check(archetype_id, id))
+            .map(id => this.get_column(id)!);
     }
 }
 

@@ -30,7 +30,9 @@ test('It works', () => {
     expect(a.index === e.index).toBe(true);
     expect(a.generation !== e.generation).toBe(true);
 
-    gv.iter_occupied().for_each(n => {
+    gv.iter().for_each(n => {
         console.log(n.node, n.generation);
     })
+
+
 })

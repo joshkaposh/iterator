@@ -6,7 +6,11 @@ import type { TableId } from "./storage";
 
 export type ArchetypeId = number;
 
-export function archetype_id(component_ids: ComponentId[]) {
+export const ARCHETYPE_ID = {
+    INVALID: -1
+}
+
+export function archetype_id(component_ids: Iterable<ComponentId>) {
     return Bit.set_many(0, ...component_ids)
 }
 
@@ -38,10 +42,10 @@ export class Archetype {
 
 export class Archetypes {
     #archetypes: Map<ArchetypeId, Archetype> = new Map();
-    // #generation = 0;
+    #generation = 0;
 
     generation(): number {
-        return 0
+        return this.#generation;
     }
 
     len(): number {
@@ -53,6 +57,7 @@ export class Archetypes {
     }
 
     insert_archetype(mask: number, archetype: Archetype) {
+        this.#generation++;
         this.#archetypes.set(mask, archetype);
     }
 
@@ -63,8 +68,4 @@ export class Archetypes {
     iter(): Iterator<Archetype> {
         return iter(this.#archetypes.values());
     }
-
-    // archetypes_with(component_id: ComponentId) {
-    //     return this.iter().filter(a => a.contains(component_id))
-    // }
 }

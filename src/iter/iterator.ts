@@ -371,29 +371,43 @@ class Flatten<T> extends Iterator<T> {
     constructor(iterable: Iterator<Iterator<T>>) {
         super()
         this.#outter = iterable;
-        const v = this.#outter.next().value;
-        this.#inner = v ? iter(v) : null;
     }
 
     override into_iter(): Iterator<T> {
-        this.#outter.into_iter();
-        const v = this.#outter.next().value;
-        this.#inner = v ? iter(v) : null;
         return this;
+    }
+
+    #next_loop(): IterResult<T> {
+
+        let n = this.#inner!.next();
+
+        if (n.done) {
+            // advance outter
+            const n2 = this.#outter.next();
+            if (n2.done) {
+                // outter is done
+                return done();
+            } else {
+                // just advanced outter, so return new n;
+                this.#inner = iter(n2.value);
+                return this.#inner.next()
+            }
+
+        } else {
+            return n
+        }
     }
 
     override next(): IterResult<T> {
         if (!this.#inner) {
-            return done();
-        } else {
-            const n = this.#inner.next();
-            if (!n.done) {
-                return n
+            const n = this.#outter.next().value;
+            if (!n) {
+                return done()
             }
-            const v = this.#outter.next().value
-            this.#inner = v ? iter(v) : null;
-            return is_some(this.#inner) ? this.#inner.next() : done();
+            this.#inner = iter(n);
         }
+
+        return this.#next_loop()
     }
 }
 

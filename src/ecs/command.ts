@@ -1,5 +1,5 @@
-import { World } from ".";
-import { Entity } from './entity'
+import { Component, QueryData, World } from ".";
+import { Entity, EntityRef } from './entity'
 import { iter } from "../iter";
 import type { Option } from "../option";
 import { Archetype, archetype_id } from "./archetype";
@@ -9,20 +9,22 @@ export abstract class Command {
     abstract apply(world: World): void;
 }
 
+
+type EntityArray = InstanceType<Component>[];
+
 class SpawnCommand extends Command {
-    #components: {}[]
+    #components: EntityArray
     constructor(components: any[]) {
         super();
         this.#components = components;
     }
     override apply(world: World): void {
-        const ids = iter(this.#components).map(c => world.component_id(c)).collect()
+        const ids = world.component_ids(this.#components)
         const arch_id = archetype_id(ids);
         let archetype = world.archetypes().get_archetype(arch_id);
         const tables = world.tables();
 
         if (!archetype) {
-
             const table = new Table(tables.len(), arch_id);
             tables.insert_table(table);
             //! SAFETY: archetype does not exist, and only inserting one entity, so id = 0
@@ -50,10 +52,52 @@ class SpawnCommand extends Command {
     }
 }
 
+class SpawnBatchCommand extends Command {
+    #components: EntityArray[]
+    constructor(components: any[]) {
+        super();
+        this.#components = components;
+    }
+
+    override apply(world: World): void {
+        const ids = world.component_ids(this.#components[0]);
+        const arch_id = archetype_id(ids);
+        let archetype = world.archetypes().get_archetype(arch_id);
+        const tables = world.tables();
+
+        if (!archetype) {
+            const table = new Table(tables.len(), arch_id);
+            tables.insert_table(table);
+            archetype = new Archetype(table.id(), ids, arch_id)
+            world.archetypes().insert_archetype(arch_id, archetype);
+
+            const len = this.#components.length;
+            table.insert_columns(ids);
+            table.reserve(len);
+
+            for (let i = 0; i < len; i++) {
+                table.insert_row(i, this.#components[i], world);
+            }
+        } else {
+            const table = tables.get_table(archetype.table_id())!;
+            const len = this.#components.length;
+            const start = table.entity_count()
+            const end = start + len;
+            table.reserve(len)
+
+            let j = 0;
+            for (let i = start; i < end; i++) {
+                table.insert_row(i, this.#components[j], world);
+                j++;
+            }
+        }
+    }
+}
+
 class DespawnCommand extends Command {
 
-    #entity: Entity;
-    constructor(entity: Entity) {
+    #entity: Entity<QueryData>;
+    constructor(entity: Entity<QueryData>) {
         super()
         this.#entity = entity;
     }
@@ -61,7 +105,7 @@ class DespawnCommand extends Command {
     override apply(world: World): void {
         const table = world.tables().get_table(this.#entity.table_id())!
         table.iter().for_each(col => {
-            col.remove(this.#entity.id())
+            col.swap_remove(this.#entity.id())
         })
     }
 }
@@ -93,13 +137,56 @@ export class CommandQueue {
     }
 }
 
-export class Commands {
+type Bundle = any;
 
-    static add(command: Command, queue: CommandQueue) {
-        queue.enqueue(command);
+class EntityCommands {
+    #entity: any;
+    #commands: Commands
+    constructor(entity: any, commands: Commands) {
+        this.#entity = entity;
+        this.#commands = commands;
     }
 
-    static spawn(components: {}[], queue: CommandQueue) {
-        Commands.add(new SpawnCommand(components), queue);
+    id() {
+        return this.#entity;
+    }
+
+    insert(bundle: Bundle) { }
+}
+
+export class Commands {
+    #queue: CommandQueue;
+    #world: World;
+    #entities: any;
+    constructor(queue: CommandQueue, world: World) {
+        this.#queue = queue;
+        this.#world = world;
+        this.#entities = [];
+    }
+
+    add(command: Command) {
+        this.#queue.enqueue(command);
+    }
+
+    despawn(entity: EntityRef<QueryData>) {
+        this.add(new DespawnCommand(entity as Entity<QueryData>))
+        this.#queue.dequeue()?.apply(this.#world);
+    }
+
+    spawn_empty() {
+        const entity = this.#entities.reserve_entity();
+        return new EntityCommands(entity, this);
+    }
+
+    spawn(components: EntityArray) {
+        this.add(new SpawnCommand(components));
+        // ! immediately apply command
+        this.#queue.dequeue()?.apply(this.#world);
+    }
+
+    spawn_batch(components: EntityArray[]) {
+        this.add(new SpawnBatchCommand(components))
+        // ! immediately apply command
+        this.#queue.dequeue()?.apply(this.#world);
     }
 }

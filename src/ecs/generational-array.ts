@@ -96,8 +96,7 @@ export class GenerationalArray<T> {
         return this.#len;
     }
 
-
-    iter_occupied(): DoubleEndedIterator<GenNode<T> & { node: Occupied<T> }> {
+    iter(): DoubleEndedIterator<GenNode<T> & { node: Occupied<T> }> {
         // @ts-expect-error
         return iter(this.#data).filter(n => 'Occupied' in n.node)
     }

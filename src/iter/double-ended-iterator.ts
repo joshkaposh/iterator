@@ -44,9 +44,9 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new Filter(this, callback)
     }
 
-    // override flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): DoubleEndedIterator<O> {
-    //     return new Flatten(this as any);
-    // }
+    override flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): DoubleEndedIterator<O> {
+        return new Flatten(this as any);
+    }
 
     override fuse(): DoubleEndedIterator<T> {
         return new FusedDoubleEndedIterator(this)
@@ -312,375 +312,114 @@ class Filter<T> extends DoubleEndedIterator<T> {
     }
 }
 
-function and_then_or_clear<T, U>(opt: Option<T>, f: (value: T) => IterResult<U>): IterResult<U> {
-    if (is_some(opt)) {
-        const x = f(opt);
-        return x
+class Flatten<T> extends DoubleEndedIterator<T> {
+    #outter: DoubleEndedIterator<DoubleEndedIterator<T>>;
+    #frontiter: Option<DoubleEndedIterator<T>>;
+    #backiter: Option<DoubleEndedIterator<T>>;
+
+    constructor(iterable: DoubleEndedIterator<DoubleEndedIterator<T>>) {
+        super()
+        this.#outter = iterable;
     }
-    return done();
+
+    override into_iter(): DoubleEndedIterator<T> {
+        this.#outter.into_iter();
+        return this;
+    }
+
+    #front_loop(it: DoubleEndedIterator<T>): IterResult<T> {
+
+        let n = it.next();
+
+        if (n.done) {
+            // advance outter
+            const n2 = this.#outter.next();
+            if (n2.done) {
+                // outter is done
+                return done();
+            } else {
+                // just advanced outter, so return new n;
+                this.#frontiter = iter(n2.value);
+                return this.#frontiter.next()
+            }
+
+        } else {
+            return n
+        }
+    }
+
+    #back_loop(it: DoubleEndedIterator<T>): IterResult<T> {
+
+        let n = it.next_back();
+
+        if (n.done) {
+            // advance outter
+            const n2 = this.#outter.next_back();
+            if (n2.done) {
+                // outter is done
+                return done();
+            } else {
+                // just advanced outter, so return new n;
+                this.#backiter = iter(n2.value);
+                return this.#backiter.next_back()
+            }
+
+        } else {
+            return n
+        }
+    }
+
+
+    override next(): IterResult<T> {
+        if (!this.#frontiter) {
+            const n = this.#outter.next().value;
+            if (!n) {
+                return done()
+            }
+            this.#frontiter = iter(n);
+        }
+
+        const n = this.#front_loop(this.#frontiter);
+
+        if (n.done) {
+            if (this.#backiter) {
+                return this.#front_loop(this.#backiter)
+            } else {
+                return done()
+            }
+        }
+        return n
+        //     return n
+        // }
+    }
+
+    override next_back(): IterResult<T> {
+        if (!this.#backiter) {
+            const n = this.#outter.next_back().value;
+            if (!n) {
+                return done()
+            }
+            this.#backiter = iter(n);
+        }
+
+        const n = this.#back_loop(this.#backiter);
+
+        if (n.done) {
+            if (this.#frontiter) {
+                return this.#back_loop(this.#frontiter)
+            } else {
+                return done()
+            }
+        }
+
+        return n
+        // if (n.done) {
+        //     return this.next();
+        // } else {
+        //     return n
+        // }
+    }
 }
-
-// class FlattenCompat<T> extends Iterator<T> {
-//     #iter: Iterator<Iterator<T>>;
-//     #front_iter: Option<Iterator<T>>;
-//     #back_iter: Option<Iterator<T>>;
-//     constructor(iterable: Iterator<Iterator<T>>) {
-//         super()
-//         this.#iter = iterable.fuse();
-//     }
-//     override size_hint(): [number, Option<number>] {
-//         let [flo, fhi] = this.#front_iter ? this.#front_iter.size_hint() : [0, 0];
-//         let [blo, bhi] = this.#back_iter ? this.#back_iter.size_hint() : [0, 0];
-//         const lo = Intrinsics.u32.saturating_add(flo, blo);
-
-//         if ('size' in this.#iter && typeof this.#iter.size === 'function') {
-//             const fixed_size = this.#iter.size();
-//             let [lower, upper] = this.#iter.size_hint();
-//             lower = Intrinsics.u32.saturating_mul(lower, fixed_size);
-//             lower = Intrinsics.u32.saturating_add(lower, lo)
-//             fhi = Intrinsics.u32.checked_add(fhi ?? 0, bhi ?? 0)
-//             upper = Intrinsics.u32.checked_add(fhi ?? 0, Intrinsics.u32.checked_mul(fixed_size, upper ?? 0) ?? 0)
-//             return [lower, upper]
-//         }
-
-//         const [l, h] = this.#iter.size_hint();
-//         if (l === 0 && h === 0 && is_some(fhi) && is_some(bhi)) {
-//             return [lo, Intrinsics.u32.checked_add(fhi, bhi)];
-//         } else {
-//             return [lo, null]
-//         }
-//     }
-
-//     override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
-//         function flatten(fold: (acc: B, inc: T) => Result<B, Err>) {
-//             return (acc: B, it: Iterator<any>) => it.try_fold(acc, fold)
-//         }
-
-//         return this.iter_try_fold(initial, flatten(fold))
-//     }
-
-//     override fold<B>(initial: B, fold: FoldFn<T, B>): B {
-//         function flatten(fold: (acc: B, inc: T) => B) {
-//             return (acc: B, it: Iterator<any>) => it.fold(acc, fold)
-//         }
-
-//         return this.iter_fold(initial, flatten(fold))
-
-//     }
-
-
-
-//     override next(): IterResult<T> {
-//         while (true) {
-//             const elt = and_then_or_clear(this.#front_iter, () => this.#front_iter!.next())
-//             if (!elt.done) {
-//                 return elt
-//             }
-
-//             const n = this.#iter.next();
-//             if (n.done) {
-//                 return and_then_or_clear(this.#back_iter, () => this.#back_iter!.next())
-//             } else {
-//                 this.#front_iter = iter(n.value)
-//             }
-//         }
-//     }
-
-//     iter_fold<Acc>(acc: Acc, fold: (acc: Acc, item: T) => Acc) {
-
-//         function flatten<Acc>(
-//             fold: (acc: Acc, item: Iterator<any>) => Acc
-//         ): (acc: Acc, item: Iterator<any>) => Acc {
-//             return (acc, item) => fold(acc, item.into_iter())
-//         }
-
-//         if (is_some(this.#front_iter)) {
-//             acc = fold(acc, this.#front_iter)
-//         }
-
-//         acc = this.#iter.fold(acc, flatten(fold))
-
-//         if (is_some(this.#back_iter)) {
-//             acc = fold(acc, this.#back_iter)
-//         }
-//         return acc
-//     }
-
-//     iter_try_fold<Acc>(acc: Acc, fold: (acc: Acc, item: Iterator<T>) => Result<T, Err>) {
-
-//         function flatten(
-//             frontiter: Option<Iterator<T>>,
-//             fold: (acc: Acc, item: Iterator<T>) => Result<T, Err>
-//         ): (acc: Acc, item: Iterator<any>) => Result<T, Err> {
-//             return (acc, it) => fold(acc, frontiter.insert(it.into_iter()))
-//         }
-
-//         if (this.#front_iter) {
-//             acc = fold(acc, this.#front_iter);
-//         }
-
-//         this.#front_iter = null;
-//         acc = this.#iter.try_fold(acc, flatten(this.#front_iter, fold))
-//         this.#front_iter = null;
-//         if (this.#back_iter) {
-//             acc = fold(acc, this.#back_iter)
-//         }
-//         this.#back_iter = null;
-//         return acc; `    `
-//     }
-// }
-
-// class FlattenCompatDouble<T> extends DoubleEndedIterator<T> {
-//     #iter: DoubleEndedIterator<DoubleEndedIterator<T>>;
-//     #front_iter: Option<DoubleEndedIterator<T>>;
-//     #back_iter: Option<DoubleEndedIterator<T>>;
-//     constructor(iterable: DoubleEndedIterator<DoubleEndedIterator<T>>) {
-//         super()
-//         this.#iter = iterable.fuse();
-//     }
-
-//     override size_hint(): [number, Option<number>] {
-//         let [flo, fhi] = this.#front_iter ? this.#front_iter.size_hint() : [0, 0];
-//         let [blo, bhi] = this.#back_iter ? this.#back_iter.size_hint() : [0, 0];
-//         const lo = Intrinsics.u32.saturating_add(flo, blo);
-
-//         if ('size' in this.#iter && typeof this.#iter.size === 'function') {
-//             const fixed_size = this.#iter.size();
-//             let [lower, upper] = this.#iter.size_hint();
-//             lower = Intrinsics.u32.saturating_mul(lower, fixed_size);
-//             lower = Intrinsics.u32.saturating_add(lower, lo)
-//             fhi = Intrinsics.u32.checked_add(fhi ?? 0, bhi ?? 0)
-//             upper = Intrinsics.u32.checked_add(fhi ?? 0, Intrinsics.u32.checked_mul(fixed_size, upper ?? 0) ?? 0)
-//             return [lower, upper]
-//         }
-
-//         const [l, h] = this.#iter.size_hint();
-//         if (l === 0 && h === 0 && is_some(fhi) && is_some(bhi)) {
-//             return [lo, Intrinsics.u32.checked_add(fhi, bhi)];
-//         } else {
-//             return [lo, null]
-//         }
-//     }
-
-//     override next(): IterResult<T> {
-//         while (true) {
-//             const elt = and_then_or_clear(this.#front_iter, () => this.#front_iter!.next())
-//             if (!elt.done) {
-//                 return elt
-//             };
-//             const n = this.#iter.next();
-//             if (n.done) {
-//                 return and_then_or_clear(this.#back_iter, () => this.#back_iter!.next())
-//             } else {
-//                 this.#front_iter = iter(n.value);
-//             }
-//         }
-//     }
-
-//     override next_back(): IterResult<T> {
-//         while (true) {
-//             const elt = and_then_or_clear(this.#back_iter, () => this.#back_iter!.next_back())
-//             if (!elt.done) {
-//                 return elt
-//             }
-//             const n = this.#iter.next_back();
-//             if (n.done) {
-//                 return and_then_or_clear(this.#front_iter, () => this.#front_iter!.next_back())
-//             } else {
-//                 this.#back_iter = iter(n.value)
-//             }
-//         }
-//     }
-
-//     // override advance_back_by(n: number): Result<undefined, NonZeroUsize> {
-//     // }
-
-//     override count(): number {
-//         return this.#iter.count();
-//     }
-
-//     override last(): Option<T> {
-//         function last(opt: Option<T>, iter: DoubleEndedIterator<T>) {
-//             const l = iter.last();
-//             return l ?? opt;
-//         }
-
-//         return this.iter_fold(null, last)
-//     }
-
-
-//     override fold<B>(initial: B, fold: FoldFn<T, B>): B {
-//         function flatten(fold: (acc: B, inc: T) => B) {
-//             return (acc: B, it: Iterator<any>) => it.fold(acc, fold)
-//         }
-
-//         return this.iter_fold(initial, flatten(fold))
-
-//     }
-
-//     override rfold<B>(initial: B, fold: FoldFn<T, B>): B {
-
-//     }
-
-//     iter_fold<Acc>(acc: Acc, fold: (acc: Acc, item: T) => Acc) {
-
-//         function flatten<Acc>(
-//             fold: (acc: Acc, item: DoubleEndedIterator<any>) => Acc
-//         ): (acc: Acc, item: DoubleEndedIterator<any>) => Acc {
-//             return (acc, item) => fold(acc, item.into_iter())
-//         }
-
-//         if (is_some(this.#front_iter)) {
-//             acc = fold(acc, this.#front_iter)
-//         }
-
-//         acc = this.#iter.fold(acc, flatten(fold))
-
-//         if (is_some(this.#back_iter)) {
-//             acc = fold(acc, this.#back_iter)
-//         }
-//         return acc
-//     }
-
-//     iter_rfold<Acc, U>(acc: Acc, fold: (acc: Acc, item: U) => Acc) {
-//         function flatten<Acc>(): (acc: Acc, item: DoubleEndedIterator<any>) => Acc {
-//             return (acc, it) => fold(acc, it.into_iter())
-//         }
-
-//         if (this.#back_iter) {
-//             acc = fold(acc, this.#back_iter)
-//         }
-
-//         acc = this.#iter.rfold(acc, flatten(fold))
-
-//         if (this.#front_iter) {
-//             acc = fold(acc, this.#front_iter)
-//         }
-
-//         return acc;
-//     }
-
-//     iter_try_fold<Acc>(acc: Acc, fold: (acc: Acc, item: DoubleEndedIterator<T>) => Result<T, Err>) {
-
-//         function flatten(
-//             frontiter: Option<DoubleEndedIterator<T>>,
-//             fold: (acc: Acc, item: DoubleEndedIterator<T>) => Result<T, Err>
-//         ): (acc: Acc, item: DoubleEndedIterator<any>) => Result<T, Err> {
-//             return (acc, it) => fold(acc, frontiter.insert(it.into_iter()))
-//         }
-
-//         if (this.#front_iter) {
-//             acc = fold(acc, this.#front_iter);
-//         }
-
-//         this.#front_iter = null;
-//         acc = this.#iter.try_fold(acc, flatten(this.#front_iter, fold))
-//         this.#front_iter = null;
-//         if (this.#back_iter) {
-//             acc = fold(acc, this.#back_iter)
-//         }
-//         this.#back_iter = null;
-//         return acc; `    `
-//     }
-
-//     iter_try_rfold<Acc>(acc: Acc, fold: (acc: Acc, item: T) => Result<Acc, Err>) {
-//         function flatten<Acc>(
-//             backiter: Option<DoubleEndedIterator<T>>,
-//             fold: (acc: Acc, item: DoubleEndedIterator<T>) => Result<Acc, Err>,
-//         ): (acc: Acc, item: DoubleEndedIterator<T>) => Result<Acc, Err> {
-//             return (acc, iter) => fold(acc, backiter.insert(iter.into_iter()))
-//         }
-
-//         if (this.#back_iter) {
-//             acc = fold(acc, this.#back_iter)
-//         }
-//         this.#back_iter = null;
-//         acc = this.#iter.try_rfold(acc, flatten(this.#back_iter, fold));
-//         this.#back_iter = null
-//         if (this.#front_iter) {
-//             acc = fold(acc, this.#front_iter)
-//         }
-//         this.#front_iter = null
-//         return acc;
-//     }
-
-//     override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
-//         function flatten(fold: (acc: B, inc: T) => Result<B, Err>) {
-//             return (acc: B, it: Iterator<any>) => it.try_fold(acc, fold)
-//         }
-
-//         return this.iter_try_fold(initial, flatten(fold))
-//     }
-
-//     override try_rfold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
-
-//     }
-// }
-
-
-// class Flatten<T> extends DoubleEndedIterator<T> {
-//     #inner: FlattenCompatDouble<T>;
-//     constructor(iterable: DoubleEndedIterator<DoubleEndedIterator<T>>) {
-//         super()
-//         this.#inner = new FlattenCompatDouble(iterable);
-//     }
-
-//     override into_iter(): DoubleEndedIterator<T> {
-//         this.#iter.into_iter();
-//         const f = this.#iter.next().value;
-//         const b = this.#iter.next_back().value;
-
-//         this.#front_iter = f ? iter(f) : null;
-//         this.#back_iter = b ? iter(b) : null;
-
-//         return this;
-//     }
-
-//     override next(): IterResult<T> {
-//         return this.#inner.next()
-//     }
-
-//     override next_back(): IterResult<T> {
-//         return this.#inner.next_back();
-//     }
-
-//     override size_hint(): [number, Option<number>] {
-//         return this.#inner.size_hint();
-//     }
-
-//     override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
-//         return this.#inner.try_fold(initial, fold)
-//     }
-
-//     override try_rfold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
-//         return this.#inner.try_rfold(initial, fold);
-//     }
-
-//     override fold<B>(initial: B, fold: FoldFn<T, B>): B {
-//         return this.#inner.fold(initial, fold)
-//     }
-
-//     override rfold<B>(initial: B, fold: FoldFn<T, B>): B {
-//         return this.#inner.rfold(initial, fold)
-//     }
-
-//     override advance_by(n: number): Result<undefined, NonZeroUsize> {
-//         return this.#inner.advance_by(n)
-//     }
-
-//     override advance_back_by(n: number): Result<undefined, NonZeroUsize> {
-//         return this.#inner.advance_back_by(n)
-//     }
-
-//     override count(): number {
-//         return this.#inner.count();
-//     }
-
-//     override last(): Option<T> {
-//         return this.#inner.last();
-//     }
-// }
-
 class Inspect<T> extends DoubleEndedIterator<T> {
     #callback: (value: T) => void;
     #iterable: DoubleEndedIterator<T>;
