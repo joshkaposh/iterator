@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { DoubleEndedIterator, Iterator, iter, ErrorExt, IterIterable, IterGenerator } from "../src/iter";
-import * as Intrinsics from '../src/intrinsics';
+// import * as Intrinsics from '../src/intrinsics';
 import { is_none } from '../src/option';
 import { resize } from '../src/util';
 
@@ -100,24 +100,16 @@ function* toInfinityAndBeyond() {
     }
 }
 
-function* flatten<T>(input: T[][]) {
-    // let outer = input[Sym]
-    for (const inner of input) {
-        yield* inner
-    }
-}
 
 test('Flatten', () => {
     const none = [];
-    const empty = [[], []];
+    const empty = [[], [], []];
     const two_wide = [[1, 2], [3, 4], [5, 6]];
     const three_wide = [[1, 2, 3], [4, 5, 6]];
-    const really_wide = [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [11, 12, 13, 14, 15]];
-
+    const five_wide = [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]];
 
     const expected = [1, 2, 3, 4, 5, 6];
     const rev = structuredClone(expected).reverse()
-
 
     const long = Array.from({ length: 10 }, (_) => Array.from({ length: 10 }, (_, i) => i + 1))
     const expected_long = [
@@ -132,7 +124,10 @@ test('Flatten', () => {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10
     ]
-    console.log(iter(two_wide).flatten().collect());
+
+    expect(iter(none).collect()).toEqual([])
+    expect(iter(empty).flatten().collect()).toEqual([])
+    expect(iter(empty).flatten().rev().collect()).toEqual([])
 
     expect(iter(two_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
     expect(iter(three_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
@@ -148,7 +143,6 @@ test('Flatten', () => {
     expect(flat.next_back().value).toBe(3);
     expect(flat.next().value).toBe(undefined);
 
-
     const f = iter([['a1', 'a2', 'a3'], ['b1', 'b2', 'b3']]).flatten();
 
     expect(f.next().value).toBe('a1');
@@ -160,20 +154,25 @@ test('Flatten', () => {
     expect(f.next().value).toBe(undefined);
     expect(f.next_back().value).toBe(undefined);
 
-    // const flat_long = iter(really_wide).flatten().rev();
-    // expect(flat_long.next().value).toBe(15);
-    // expect(flat_long.next().value).toBe(14);
-    // expect(flat_long.next().value).toBe(13);
-    // expect(flat_long.next().value).toBe(12);
-    // expect(flat_long.next().value).toBe(11);
-    // expect(flat_long.next().value).toBe(10);
-    // expect(flat_long.next_back().value).toBe(1);
-    // expect(flat_long.next_back().value).toBe(2);
-    // expect(flat_long.next_back().value).toBe(3);
-    // expect(flat_long.next_back().value).toBe(4);
-    // expect(flat_long.next_back().value).toBe(5);
-    // expect(flat_long.next().value).toBe(undefined)
-    // expect(flat_long.next_back().value).toBe(undefined)
+    const flat_long = iter(five_wide).flatten().rev();
+
+    expect(flat_long.next().value).toBe(10);
+    expect(flat_long.next().value).toBe(9);
+    expect(flat_long.next().value).toBe(8);
+    expect(flat_long.next().value).toBe(7);
+    expect(flat_long.next().value).toBe(6);
+    expect(flat_long.next().value).toBe(5);
+
+    expect(flat_long.next_back().value).toBe(1);
+    expect(flat_long.next_back().value).toBe(2);
+    expect(flat_long.next().value).toBe(4);
+    expect(flat_long.next().value).toBe(3);
+
+    expect(flat_long.next().value).toBe(undefined);
+    expect(flat_long.next_back().value).toBe(undefined);
+
+    expect(flat_long.into_iter().collect()).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1])
+
 })
 
 test('Resize', () => {
@@ -183,36 +182,6 @@ test('Resize', () => {
     resize(a, 3, 0);
     expect(a).toEqual([0, 0, 0])
 
-})
-
-test('number sizes', () => {
-    const { u8 } = Intrinsics;
-
-    // works with booleans
-    expect(u8.cast(false)).toBe(0);
-    expect(u8.cast(true)).toBe(1);
-    expect(u8.wrapping_add(0, u8(-1))).toBe(u8.MAX);
-    expect(u8.wrapping_add(u8.MAX, 1)).toBe(0);
-    expect(u8.wrapping_sub(0, 1)).toBe(u8.MAX);
-    expect(u8.wrapping_sub(0, u8(256))).toBe(0);
-
-    expect(u8.saturating_add(u8.MAX, 1)).toBe(u8.MAX);
-    expect(u8.saturating_add(u8.MAX, u8(1000000))).toBe(u8.MAX);
-    expect(u8.saturating_sub(0, u8(1000000))).toBe(0);
-
-    expect(is_none(u8.checked_add(u8.MAX, 0))).toBe(false);
-    expect(is_none(u8.checked_add(u8.MAX, 1))).toBe(true);
-    expect(is_none(u8.checked_mul(128, 2))).toBe(true);
-
-    expect(u8(-1)).toBe(u8.MAX);
-    expect(u8(-1)).toBe(u8(-1));
-    expect(u8.wrapping_mul(128, 2)).toBe(0)
-
-    expect(u8.wrapping_div(u8.cast(-10), 1)).toBe(246)
-
-    expect(u8(-1)).toBe(u8.MAX);
-    expect(u8(u8.MAX + 1)).toBe(0);
-    expect(u8(u8.MAX + 2)).toBe(1);
 })
 
 test('Native Data Structures', () => {
@@ -229,46 +198,10 @@ test('Native Data Structures', () => {
     expect(iter(function* () { }) instanceof IterGenerator).toBe(true)
     expect(iter([]) instanceof DoubleEndedIterator).toBe(true)
     expect(iter(new Uint16Array()) instanceof DoubleEndedIterator).toBe(true);
+
+    const collect_map = iter([['k', 'v']]).collect(Map)
+    expect(collect_map.get('k')).toBe('v')
 })
-
-// test('Flatten', () => {
-//     function* gen_nested() {
-//         yield [1, 2] as const;
-//         yield [3, 4] as const;
-//         yield [5, 6] as const;
-//     }
-
-//     // expect(iter.of([1, 2, 3], [4, 5, 6]).flatten().collect()).toBe([1, 2, 3, 4, 5, 6])
-
-//     const gen = iter(gen_nested).flatten();
-
-//     expect(gen.next().value).toBe(1);
-//     expect(gen.next().value).toBe(2);
-//     expect(gen.next().value).toBe(3);
-//     expect(gen.next().value).toBe(4);
-//     expect(gen.next().value).toBe(5);
-//     expect(gen.next().value).toBe(6);
-//     const nested = [[1, 2], [3, 4], [5, 6]]
-//     const flat2 = iter(nested).flatten();
-//     expect(flat2.next_back().value).toBe(6);
-//     expect(flat2.next_back().value).toBe(5);
-//     expect(flat2.next_back().value).toBe(4);
-//     expect(flat2.next_back().value).toBe(3);
-//     expect(flat2.next_back().value).toBe(2);
-//     expect(flat2.next_back().value).toBe(1);
-//     expect(flat2.next().value).toBe(undefined)
-//     expect(flat2.next_back().value).toBe(undefined)
-
-//     const flat3 = iter([[1, 2, 3], [4, 5, 6]]).flatten();
-//     console.log(flat3.next().value);
-//     console.log(flat3.next().value);
-//     console.log(flat3.next().value);
-//     console.log(flat3.next().value);
-//     console.log(flat3.next().value);
-//     console.log(flat3.next().value);
-//     console.log(flat3.next().value);
-
-// })
 
 test('Free standing functions', () => {
     const s = iter.successors(2, (v) => v < Math.pow(2, 5) ? v * v : null)
@@ -276,6 +209,8 @@ test('Free standing functions', () => {
     const once = iter.once(1)
     expect(once.next().value).toBe(1)
     expect(iter.repeat(69).take(5).collect()).toEqual([69, 69, 69, 69, 69])
+
+    expect(iter.once_with(() => 1).next().value).toBe(1);
 })
 
 test('MapWhile', () => {

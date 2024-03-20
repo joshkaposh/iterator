@@ -1,13 +1,7 @@
 import { iter } from ".";
-import * as Intrinsics from "../intrinsics";
-import { Err, Ok, Option, Result, is_error, is_some } from "../option";
-import { MustReturn, TODO } from "../util";
-import { Collection, ErrorExt, FoldFn, IntoCollection, IterResult, NonZeroUsize, collect, done, iter_item, non_zero_usize, unzip } from "./shared";
-
-export type Item<It> =
-    It extends Iterable<infer T> ? T :
-    It extends Iterator<infer T> ? T :
-    never;
+import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
+import { type MustReturn, TODO } from "../util";
+import { ErrorExt, FoldFn, Item, IterResult, NonZeroUsize, SizeHint, collect, done, iter_item, non_zero_usize, unzip } from "./shared";
 
 export interface Iterator<T> {
     advance_by(n: number): Result<Ok, NonZeroUsize>
@@ -50,8 +44,8 @@ export abstract class Iterator<T> {
     }
 
     collect(into?: undefined): T[];
-    collect<I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(into: I): ReturnType<I['from']>
-    collect<I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(into?: I): Collection<I> | T[] {
+    collect<I extends (new (it: Iterable<T>) => any)>(into: I): InstanceType<I>
+    collect<I extends (new (it: Iterable<T>) => any)>(into?: I): InstanceType<I> | T[] {
         return collect(this, into as I)
     }
 
@@ -87,6 +81,10 @@ export abstract class Iterator<T> {
 
     flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): Iterator<O> {
         return new Flatten(this as any)
+    }
+
+    flat_map<B>(f: (value: T) => B): Iterator<B> {
+        return new FlatMap(this as any, f)
     }
 
     find(predicate: (value: T) => boolean): Option<T> {
@@ -238,7 +236,7 @@ export abstract class Iterator<T> {
 }
 
 export interface ExactSizeIterator<T> {
-    size_hint(): Intrinsics.SizeHint<number, number>
+    size_hint(): SizeHint<number, number>
 }
 export abstract class ExactSizeIterator<T> extends Iterator<T> {
     len(): number {
@@ -411,6 +409,26 @@ class Flatten<T> extends Iterator<T> {
     }
 }
 
+class FlatMap<A, B> extends Iterator<B> {
+    #flat: Flatten<A>
+    #f: (value: A) => B;
+    constructor(it: Iterator<Iterator<A>>, f: (value: A) => B) {
+        super()
+        this.#flat = new Flatten(it);
+        this.#f = f;
+    }
+
+    override next(): IterResult<B> {
+        const n = this.#flat.next();
+        if (n.done) {
+            return done();
+        }
+
+        return n.done ? done() : iter_item(this.#f(n.value))
+    }
+}
+
+
 class Inspect<T> extends Iterator<T> {
     #callback: (value: T) => void;
     #iterable: Iterator<T>;
@@ -457,14 +475,15 @@ function intersperse_fold<I extends Iterator<any>, B>(
     })
 }
 
-function intersperse_size_hint<I extends Iterator<any>>(iter: I, needs_sep: boolean): Intrinsics.SizeHint {
+function intersperse_size_hint<I extends Iterator<any>>(iter: I, needs_sep: boolean): SizeHint {
     let [lo, hi] = iter.size_hint();
-    const next_is_elem = !needs_sep;
-    const next_is_elem_int = next_is_elem ? 1 : 0;
-    lo = Intrinsics.saturating_add(Intrinsics.saturating_sub(lo, next_is_elem_int, 'usize'), lo, 'usize')
-    if (is_some(hi)) {
-        hi = Intrinsics.checked_add(Intrinsics.saturating_sub(hi, next_is_elem_int, 'usize'), hi, 'usize')
-    }
+    const next_is_elem = !needs_sep ? 1 : 0;
+    lo = (lo - next_is_elem) + lo
+    // lo = Intrinsics.saturating_add(Intrinsics.saturating_sub(lo, next_is_elem_int, 'usize'), lo, 'usize')
+    // TODO: implement this check
+    // if (is_some(hi)) {
+    //     hi = Intrinsics.checked_add(Intrinsics.saturating_sub(hi, next_is_elem_int, 'usize'), hi, 'usize')
+    // }
     return [lo, hi];
 }
 
@@ -578,8 +597,8 @@ class Skip<T> extends Iterator<T> {
         this.#n = n;
     }
 
-    override size_hint(): Intrinsics.SizeHint<number, number> {
-        return this.#iterable.size_hint() as Intrinsics.SizeHint<number, number>
+    override size_hint(): SizeHint<number, number> {
+        return this.#iterable.size_hint() as SizeHint<number, number>
     }
 
     override into_iter(): Iterator<T> {
@@ -626,8 +645,9 @@ class Skip<T> extends Iterator<T> {
         if (this.#n > 0) {
             const skip = this.#n;
             this.#n = 0;
-
-            n = Intrinsics.usize.checked_add(skip, n)!
+            // TODO: implement Number.MAX_SAFE_INTEGER bounds check
+            n = skip + n
+            // n = Intrinsics.usize.checked_add(skip, n)!
             return !is_some(n) ? this.#iterable.nth(skip - 1) : this.#iterable.nth(n)
         } else {
             return this.#iterable.nth(n)
