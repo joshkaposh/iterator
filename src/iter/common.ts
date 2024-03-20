@@ -152,6 +152,4 @@ function range(start = 0, end = 0) {
     return new Range(start, end);
 }
 
-range.to = (end: number) => new Range(0, end);
-
 export { range }

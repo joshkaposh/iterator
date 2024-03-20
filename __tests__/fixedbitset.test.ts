@@ -5,10 +5,6 @@ import { assert, result } from "../src/util";
 import { is_error } from "../src/option";
 import { collect } from "../src/iter/shared";
 
-function r(x: number, y: number) {
-    return range(x, y)
-}
-
 test('it_works', () => {
     const N = 50;
     const fb = FixedBitSet.with_capacity(N);
@@ -237,7 +233,7 @@ test('insert_range', () => {
 test('set_range', () => {
     const fb = FixedBitSet.with_capacity(48);
     fb.insert_range();
-    fb.set_range(range.to(32), false);
+    fb.set_range(range(0, 32), false);
     fb.set_range(range(37, fb.len()), false);
     fb.set_range(range(5, 9), true);
     fb.set_range(range(40, 40), true);
@@ -254,7 +250,7 @@ test('toggle_range', () => {
 
     const fb = FixedBitSet.with_capacity(40);
 
-    fb.insert_range(range.to(10));
+    fb.insert_range(range(0, 10));
     fb.insert_range(range(34, 38));
     fb.toggle_range(range(5, 12));
     fb.toggle_range(range(30, fb.len()))
@@ -518,16 +514,16 @@ test('bitor_first_larger', () => {
     const b_start = 89;
     const a = FixedBitSet.with_capacity(a_len);
     const b = FixedBitSet.with_capacity(b_len);
-    a.set_range(r(0, a_end), true);
-    b.set_range(r(b_start, b.len()), true);
+    a.set_range(range(0, a_end), true);
+    b.set_range(range(b_start, b.len()), true);
     const ab = FixedBitSet.xor(a, b);
-    for (const i of r(0, b_start)) {
+    for (const i of range(0, b_start)) {
         expect(ab.contains(i));
     }
-    for (const i of r(b_start, a_end)) {
+    for (const i of range(b_start, a_end)) {
         expect(!ab.contains(i));
     }
-    for (const i of r(a_end, len)) {
+    for (const i of range(a_end, len)) {
         expect(ab.contains(i));
     }
     expect(b.len() === ab.len()).toBe(true);
@@ -722,7 +718,7 @@ test('from_iterator', () => {
 test('from_iterator_ones', () => {
     const len = 257;
     const fb = FixedBitSet.with_capacity(len);
-    for (const i of iter(r(0, len)).filter((i) => i % 7 == 0)) {
+    for (const i of iter(range(0, len)).filter((i) => i % 7 == 0)) {
         fb.put(i);
     }
     fb.put(len - 1);

@@ -46,8 +46,6 @@ export type Collection<Coll extends IntoCollection<IterInputType<any>>> = Coll e
 export function collect<T>(iter: IterInputType<T>, into?: undefined): T[];
 export function collect<T, I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(iter: IterInputType<T>, into: I): ReturnType<I['from']>
 export function collect<T, I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(iter: IterInputType<T>, into?: I): Collection<I> | T[]
-// export function collect<It extends IterInputType<any>>(it: It, into?: undefined): Item<It>[];
-// export function collect<It extends IterInputType<any>, Into extends IntoCollection<It>>(it: It, into: Into): Collection<Into>;
 export function collect<It extends IterInputType<any>, Into extends IntoCollection<It>>(it: It, into?: Into): Collection<Into> | Item<It>[] {
     if (into) {
         if ('from' in into) {

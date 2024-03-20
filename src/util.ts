@@ -9,6 +9,22 @@ export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <
 >() => T extends Y ? 1 : 2
     ? true : false;
 
+type MissingKey<T1 extends PropertyKey, T2 extends PropertyKey> = Exclude<T1, T2> | Exclude<T2, T1>;
+
+type MissingMap<T1, T2, K1 extends PropertyKey, K2 extends PropertyKey> = {
+    [P in MissingKey<K1, K2>]:
+    P extends keyof T1 ? Prettify<{ [K3 in P]: T1[P] } & {
+        required_from: T1;
+        needed_in: T2
+    }> :
+    P extends keyof T2 ? Prettify<{ [K3 in P]: T2[P] } & {
+        required_from: T2;
+        needed_in: T1
+    }> : never
+}
+
+export type Missing<T1, T2, K1 extends PropertyKey, K2 extends PropertyKey> = MissingMap<T1, T2, K1, K2>[keyof MissingMap<T1, T2, K1, K2>]
+
 export type MustReturn<F extends (...args: any[]) => any> = ReturnType<F> extends void ? never : F;
 
 // TODO: deep copy

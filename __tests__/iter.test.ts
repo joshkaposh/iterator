@@ -107,6 +107,49 @@ function* flatten<T>(input: T[][]) {
     }
 }
 
+test("Misc Tests", () => {
+    const a = iter(fill(3))
+    const a2 = iter(fill(50)).skip(10);
+
+    expect(a2.next_back().value).toBe(50)
+
+    const b = iter(count(50)).skip(10);
+
+    let s = iter(fill(3))
+    expect(s.sum()).toBe(6)
+    let s2 = iter(['1', '2', '3'])
+    expect(s2.sum()).toBe('123')
+
+    expect(b.try_fold('', (acc, inc) => {
+        if (inc === 20) {
+            return new ErrorExt(inc, `${inc} cannot be 20`)
+        }
+        return acc += inc;
+    })).toEqual(new ErrorExt(20, `20 cannot be 20`))
+    expect(b.next().value).toBe(21)
+
+    const mapped = a.map(v => v * v).map(v => v * v).collect()
+    expect(mapped).toEqual([1, 16, 81])
+
+    expect(iter([1, 2, 3])
+        .map(v => v * v)
+        .rev()
+        .map(v => v * v)
+        .enumerate()
+        .collect()
+    ).toEqual([[0, 81], [1, 16], [2, 1]])
+
+
+    expect(iter([1, 2, 3, 4])
+        .map(v => v * v)
+        .rev()
+        .map(v => v * v)
+        .filter(v => v % 2 === 0)
+        .enumerate()
+        .collect()
+    ).toEqual([[0, 256], [1, 16]])
+})
+
 test('Flatten', () => {
     const none = [];
     const empty = [[], []];
