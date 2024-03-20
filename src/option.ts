@@ -31,10 +31,13 @@ export function is_error<E extends Err>(value: unknown): value is E {
     return value instanceof ErrorExt;
 }
 
-export function or<T>(opt: Option<T>, optb: Option<T>): Option<T> {
-    return is_some(opt) ? opt : optb
-}
-
-export function or_else<T>(opt: Option<T>, f: () => Option<T>): Option<T> {
-    return is_some(opt) ? opt : f()
+export function result<T, E>(fn: () => T, err: E): Result<T, Err<E>> {
+    let res = undefined;
+    try {
+        res = fn()
+    } catch (e) {
+        res = new ErrorExt(err);
+    } finally {
+        return res as Result<T, Err>
+    }
 }

@@ -1,5 +1,4 @@
-import { ErrorExt } from "./iter";
-import { Err, None, Option, Result, is_none, is_some } from "./option";
+import { type None, type Option, is_none, is_some } from "./option";
 
 export type Prettify<T> = { [K in keyof T]: T[K] } & {}
 
@@ -8,6 +7,26 @@ export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <
     T
 >() => T extends Y ? 1 : 2
     ? true : false;
+
+
+type MissingKey<T1 extends PropertyKey, T2 extends PropertyKey> =
+    Exclude<T1, T2> |
+    Exclude<T2, T1>;
+
+type MissingMap<T1, T2, K1 extends PropertyKey, K2 extends PropertyKey> = {
+    [P in MissingKey<K1, K2>]:
+    P extends keyof T1 ? Prettify<{ [K3 in P]: T1[P] } & {
+        required_from: T1;
+        needed_in: T2
+    }> :
+    P extends keyof T2 ? Prettify<{ [K3 in P]: T2[P] } & {
+        required_from: T2;
+        needed_in: T1
+    }> : never
+}
+
+export type Missing<T1, T2, K1 extends PropertyKey, K2 extends PropertyKey> = MissingMap<T1, T2, K1, K2>[keyof MissingMap<T1, T2, K1, K2>]
+
 
 export type MustReturn<F extends (...args: any[]) => any> = ReturnType<F> extends void ? never : F;
 
@@ -60,17 +79,6 @@ export function assert(is_true: boolean, message?: string, a?: unknown, b?: unkn
     if (!is_true) {
         const msg = is_some(message) ? `${base} ${message}` : base
         throw new AssertError(msg)
-    }
-}
-
-export function result<T, E>(fn: () => T, err: E): Result<T, Err<E>> {
-    let res = undefined;
-    try {
-        res = fn()
-    } catch (e) {
-        res = new ErrorExt(err);
-    } finally {
-        return res as Result<T, Err>
     }
 }
 
