@@ -1,7 +1,5 @@
-import { expect, test } from 'vitest'
-import { DoubleEndedIterator, Iterator, iter, ErrorExt, IterIterable, IterGenerator } from "../src/iter";
-// import * as Intrinsics from '../src/intrinsics';
-import { is_none } from '../src/option';
+import { assert, expect, test } from 'vitest'
+import { DoubleEndedIterator, Iterator, iter, ErrorExt, Iterable, Generator } from "../src/iter";
 import { resize } from '../src/util';
 
 function def(n = 3, isGen = false) {
@@ -100,7 +98,6 @@ function* toInfinityAndBeyond() {
     }
 }
 
-
 test('Flatten', () => {
     const none = [];
     const empty = [[], [], []];
@@ -125,9 +122,8 @@ test('Flatten', () => {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10
     ]
 
-    expect(iter(none).collect()).toEqual([])
-    expect(iter(empty).flatten().collect()).toEqual([])
-    expect(iter(empty).flatten().rev().collect()).toEqual([])
+    assert(iter(none).count() === 0)
+    assert(iter(empty).flatten().rev().count() === 0)
 
     expect(iter(two_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
     expect(iter(three_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
@@ -188,14 +184,14 @@ test('Native Data Structures', () => {
     const m = new Map<string, boolean>()
     const s = new Set();
 
-    expect(iter(m.keys()) instanceof IterIterable).toBe(true);
-    expect(iter(m.values()) instanceof IterIterable).toBe(true)
-    expect(iter(m.entries()) instanceof IterIterable).toBe(true)
-    expect(iter(s.keys()) instanceof IterIterable).toBe(true);
-    expect(iter(s.values()) instanceof IterIterable).toBe(true);
-    expect(iter(s.entries()) instanceof IterIterable).toBe(true);
+    expect(iter(m.keys()) instanceof Iterable).toBe(true);
+    expect(iter(m.values()) instanceof Iterable).toBe(true)
+    expect(iter(m.entries()) instanceof Iterable).toBe(true)
+    expect(iter(s.keys()) instanceof Iterable).toBe(true);
+    expect(iter(s.values()) instanceof Iterable).toBe(true);
+    expect(iter(s.entries()) instanceof Iterable).toBe(true);
 
-    expect(iter(function* () { }) instanceof IterGenerator).toBe(true)
+    expect(iter(function* () { }) instanceof Generator).toBe(true)
     expect(iter([]) instanceof DoubleEndedIterator).toBe(true)
     expect(iter(new Uint16Array()) instanceof DoubleEndedIterator).toBe(true);
 

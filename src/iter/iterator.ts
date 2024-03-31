@@ -4,10 +4,12 @@ import { type MustReturn, TODO } from "../util";
 import { ErrorExt, FoldFn, Item, IterResult, NonZeroUsize, SizeHint, collect, done, iter_item, non_zero_usize, unzip } from "./shared";
 
 export interface Iterator<T> {
+    // next(): Async extends false ? IterResult<T> : Promise<IterResult<T>>
     advance_by(n: number): Result<Ok, NonZeroUsize>
 }
 export abstract class Iterator<T> {
     abstract next(): IterResult<T>;
+
     into_iter(): Iterator<T> {
         return this
     }
@@ -44,9 +46,9 @@ export abstract class Iterator<T> {
     }
 
     collect(into?: undefined): T[];
-    collect<I extends (new (it: Iterable<T>) => any)>(into: I): InstanceType<I>
-    collect<I extends (new (it: Iterable<T>) => any)>(into?: I): InstanceType<I> | T[] {
-        return collect(this, into as I)
+    collect<I extends new (it: Iterable<T>) => any>(into: I): InstanceType<I>
+    collect<I extends new (it: Iterable<T>) => any>(into?: I): InstanceType<I> | T[] {
+        return collect(this, into as any)
     }
 
     count() {
@@ -963,3 +965,39 @@ class Zip<K, V> extends Iterator<[K, V]> {
         return (k.done || v.done) ? done<[K, V]>() : iter_item([k.value, v.value])
     }
 }
+
+export type IteratorAdapter<T, T2 = any> = {
+    chain: Chain<T, T2>;
+    cycle: Cycle<T>;
+    enumerate: Enumerate<T>;
+    flatmap: FlatMap<T, T2>;
+    flatten: Flatten<T>;
+    filter: Filter<T>;
+    map: Map<T, T2>;
+    mapwhile: MapWhile<T, T2>;
+    skip: Skip<T>;
+    skipwhile: SkipWhile<T>;
+    step: StepBy<T>;
+    take: Take<T>;
+    takewhile: TakeWhile<T>;
+    peekable: Peekable<T>;
+    zip: Zip<T, T2>;
+}
+
+export const IteratorAdapters = {
+    Chain,
+    Cycle,
+    Enumerate,
+    FlatMap,
+    Flatten,
+    Filter,
+    Map,
+    MapWhile,
+    Skip,
+    SkipWhile,
+    StepBy,
+    Take,
+    TakeWhile,
+    Peekable,
+    Zip,
+} as const

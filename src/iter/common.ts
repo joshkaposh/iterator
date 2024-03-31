@@ -1,10 +1,11 @@
 
 import { Iterator } from "./iterator";
 import { ExactSizeDoubleEndedIterator } from './double-ended-iterator'
-import { type IterResult, NonZeroUsize, done, iter_item, non_zero_usize } from "./shared";
+import { type ArrayLikeType, type GeneratorType, type IterResult, NonZeroUsize, done, iter_item, non_zero_usize } from "./shared";
 import { type Result, is_some } from "../option";
 
-export class IterIterable<T> extends Iterator<T> {
+
+export class Iterable<T> extends Iterator<T> {
     __iterable: IterableIterator<T>
     constructor(iterable: IterableIterator<T>) {
         super()
@@ -20,25 +21,25 @@ export class IterIterable<T> extends Iterator<T> {
     }
 }
 
-export class IterGenerator<T> extends IterIterable<T> {
-    #into_iter: () => Generator<T>;
-    constructor(into_iter: () => Generator<T>) {
+export class Generator<T> extends Iterable<T> {
+    #into_iter: () => GeneratorType<T>;
+    constructor(into_iter: () => GeneratorType<T>) {
         super(into_iter());
         this.#into_iter = into_iter;
     }
 
-    override into_iter(): IterGenerator<T> {
+    override into_iter(): Generator<T> {
         this.__iterable = this.#into_iter();
         return this
     }
 }
 
-export class IterArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
-    #iterable: ArrayLike<T>;
+export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
+    #iterable: ArrayLikeType<T>;
     #index: number;
     #back_index: number;
 
-    constructor(iterable: ArrayLike<T>) {
+    constructor(iterable: ArrayLikeType<T>) {
         super()
         this.#iterable = iterable;
         this.#index = -1;
@@ -84,7 +85,7 @@ export class IterArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
         return non_zero_usize(this.len() - m)
     }
 
-    override into_iter(): IterArrayLike<T> {
+    override into_iter(): ArrayLike<T> {
         this.#index = -1;
         this.#back_index = this.#iterable.length;
         return this;
@@ -148,10 +149,9 @@ export class Range {
     }
 }
 
-function range(start = 0, end = 0) {
+export function range(start = 0, end = 0) {
     return new Range(start, end);
 }
 
 range.to = (end: number) => new Range(0, end);
 
-export { range }

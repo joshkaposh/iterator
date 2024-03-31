@@ -4,7 +4,6 @@ import { Iterator } from './iterator'
 import { TODO, assert } from "../util";
 import { iter } from ".";
 
-
 export interface DoubleEndedIterator<T> {
     advance_back_by(n: number): Result<Ok<undefined>, NonZeroUsize>
     chain<O extends DoubleEndedIterator<any>>(other: O): DoubleEndedIterator<T | Item<O>>;
@@ -1201,4 +1200,41 @@ export function repeat<T>(value: T) {
 
 export function repeat_with<T>(gen: () => T) {
     return new RepeatWith(gen)
+}
+
+export type DoubleEndedIteratorAdapter<T, T2 = any> = {
+    chain: Chain<T, T2>;
+    cycle: Cycle<T>;
+    enumerate: Enumerate<T>;
+    flatmap: FlatMap<T, T2>;
+    flatten: Flatten<T>;
+    filter: Filter<T>;
+    map: Map<T, T2>;
+    mapwhile: MapWhile<T, T2>;
+    skip: Skip<T>;
+    skipwhile: SkipWhile<T>;
+    step: StepBy<T>;
+    take: Take<T>;
+    takewhile: TakeWhile<T>;
+    peekable: Peekable<T>;
+    zip: Zip<T, T2>;
+}
+
+
+export const DoubleEndedIteratorAdapters = {
+    Chain,
+    Cycle,
+    FlatMap,
+    Flatten,
+    Filter,
+    Enumerate,
+    Map,
+    MapWhile,
+    Skip,
+    SkipWhile,
+    StepBy,
+    Take,
+    TakeWhile,
+    Peekable,
+    Zip,
 }

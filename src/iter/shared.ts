@@ -1,7 +1,7 @@
-import { Iterator } from './iterator'
+import { ExactSizeIterator, Iterator } from './iterator'
 import type { Result, Ok, Err, AsOption, Option } from "../option";
 import { is_error } from '../option';
-import { IterInputType, iter } from '.';
+import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, iter } from '.';
 
 export type FoldFn<T, B, R = B> = (acc: B, x: T) => R
 export type CollectFn<T, It extends Iterable<T>> = <Into extends (iter: It) => any | undefined>(into?: Into) => HasArgument<typeof into, Into> extends 1 ? Into extends (...args: any) => infer R ? R : never : T[]
@@ -16,7 +16,6 @@ export type Next<T> = Required<IteratorYieldResult<T>>;
 export type IterResult<T> = Next<T> | Done<T>;
 export type SizeHint<Lo = number, Hi = Option<number>> = [Lo, Hi]
 
-
 export type IntoCollection<It extends IterInputType<any>> = (
     (new (...args: any[]) => any) & { from(iter: It): any }
 )
@@ -25,14 +24,28 @@ export type Collection<Coll extends IntoCollection<IterInputType<any>>> = Coll e
 
 export type HasArgument<Argument, ParamType> = ParamType extends NonNullable<Argument> ? 1 : 0
 
+export type ArrayLikeType<T> = ArrayLike<T>
+export type GeneratorType<T> = Generator<T>
+
+export type DoubleEndedIteratorInputType<T = any> = ArrayLikeType<T> | DoubleEndedIterator<T>
+export type IteratorInputType<T = any> = (() => Generator<T>) | Iterator<T> | IterableIterator<T>;
+export type IterInputType<T = any> = DoubleEndedIteratorInputType<T> | IteratorInputType<T>;
+
+export type IteratorType<T> = Generator<T> | Iterator<T> | ExactSizeIterator<T>;
+export type DoubleEndedIteratorType<T> = ArrayLike<T> | DoubleEndedIterator<T> | ExactSizeDoubleEndedIterator<T>;
+export type IterType<T> = IteratorType<T> | DoubleEndedIteratorType<T>
+
+export type Iter<It> =
+    It extends DoubleEndedIteratorInputType<infer T> ?
+    It extends ExactSizeDoubleEndedIterator<T> | ArrayLike<T> ? ExactSizeDoubleEndedIterator<T> : DoubleEndedIterator<T> :
+    It extends IteratorInputType<infer T> ?
+    It extends ExactSizeIterator<T> ? ExactSizeIterator<T> : Iterator<T>
+    : never;
+
+
+
 export function is_arraylike<T>(obj?: (string | object) & { length?: number }): obj is ArrayLike<T> {
     return typeof obj !== 'function' && (typeof obj?.length === 'number' && obj.length >= 0)
-}
-
-export function* range(start: number, end: number) {
-    for (let i = start; i < end; i++) {
-        yield i
-    }
 }
 
 export function done<TReturn>(): Done<TReturn> {
@@ -82,6 +95,7 @@ export class ErrorExt<T = any> extends Error implements Err {
     constructor(err_data: T, msg?: string, options?: ErrorOptions) {
         super(msg, options)
         this.#err_data = err_data;
+        this.name = 'ErrorExt';
     }
     get() {
         return this.#err_data
