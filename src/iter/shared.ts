@@ -1,6 +1,6 @@
 import { ExactSizeIterator, Iterator } from './iterator'
 import type { Result, Ok, Err, AsOption, Option } from "../option";
-import { is_error } from '../option';
+import { is_error, is_some } from '../option';
 import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, iter } from '.';
 
 export type FoldFn<T, B, R = B> = (acc: B, x: T) => R
@@ -28,7 +28,7 @@ export type ArrayLikeType<T> = ArrayLike<T>
 export type GeneratorType<T> = Generator<T>
 
 export type DoubleEndedIteratorInputType<T = any> = ArrayLikeType<T> | DoubleEndedIterator<T>
-export type IteratorInputType<T = any> = (() => Generator<T>) | Iterator<T> | IterableIterator<T>;
+export type IteratorInputType<T = any> = (() => Generator<T>) | Iterator<T> | (() => IterableIterator<T>);
 export type IterInputType<T = any> = DoubleEndedIteratorInputType<T> | IteratorInputType<T>;
 
 export type IteratorType<T> = Generator<T> | Iterator<T> | ExactSizeIterator<T>;
@@ -60,6 +60,38 @@ export function iter_item<T>(value: T): Next<T> {
         done: false,
         value: value
     }
+}
+
+class FromFn<T> extends Iterator<T> {
+    #fn: () => Option<T>;
+    constructor(fn: () => Option<T>) {
+        super()
+        this.#fn = fn;
+    }
+
+    override into_iter(): Iterator<T> {
+        return this
+    }
+
+    override next(): IterResult<T> {
+        const n = this.#fn();
+        return is_some(n) ? iter_item(n) : done();
+    }
+}
+
+export function into_iter<It extends Iterator<any> | DoubleEndedIterator<any>>(this_iter: It, inner: (Iterator<any> | DoubleEndedIterator<any> | ExactSizeIterator<any> | ExactSizeDoubleEndedIterator<any>)[]) {
+    for (const it of inner) {
+        if ('into_iter' in it) {
+            it.into_iter();
+        } else {
+            console.error('into_iter was not found on %O', it)
+        }
+    }
+    return this_iter;
+}
+
+export function from_fn<T>(f: () => Option<T>): FromFn<T> {
+    return new FromFn(f)
 }
 
 export function collect<T>(iter: IterInputType<T>, into?: undefined): T[];

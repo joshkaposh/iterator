@@ -4,32 +4,21 @@ import { ExactSizeDoubleEndedIterator } from './double-ended-iterator'
 import { type ArrayLikeType, type GeneratorType, type IterResult, NonZeroUsize, done, iter_item, non_zero_usize } from "./shared";
 import { type Result, is_some } from "../option";
 
-
-export class Iterable<T> extends Iterator<T> {
-    __iterable: IterableIterator<T>
-    constructor(iterable: IterableIterator<T>) {
-        super()
-        this.__iterable = iterable;
-    }
-
-    override into_iter(): Iterator<T> {
-        return this
+export class Generator<T> extends Iterator<T> {
+    #into_iter: () => GeneratorType<T>;
+    #iter: GeneratorType<T>;
+    constructor(into_iter: () => GeneratorType<T>) {
+        super();
+        this.#into_iter = into_iter;
+        this.#iter = into_iter();
     }
 
     override next(): IterResult<T> {
-        return this.__iterable.next() as IterResult<T>;
-    }
-}
-
-export class Generator<T> extends Iterable<T> {
-    #into_iter: () => GeneratorType<T>;
-    constructor(into_iter: () => GeneratorType<T>) {
-        super(into_iter());
-        this.#into_iter = into_iter;
+        return this.#iter.next() as IterResult<T>;
     }
 
     override into_iter(): Generator<T> {
-        this.__iterable = this.#into_iter();
+        this.#iter = this.#into_iter();
         return this
     }
 }
@@ -85,7 +74,7 @@ export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
         return non_zero_usize(this.len() - m)
     }
 
-    override into_iter(): ArrayLike<T> {
+    override into_iter(): ExactSizeDoubleEndedIterator<T> {
         this.#index = -1;
         this.#back_index = this.#iterable.length;
         return this;

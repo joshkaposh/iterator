@@ -1,7 +1,7 @@
 import { Option } from "../option";
 import { AsyncDoubleEndedIterator } from "./async-double-ended-iterator";
 import { AsyncIterator } from "./async-iterator";
-import { ArrayLike, Generator, Iterable } from "./common";
+import { ArrayLike, Generator } from "./common";
 import { AsyncArraylike } from "./common-async";
 import { ExactSizeDoubleEndedIterator, once, once_with, repeat, repeat_with } from "./double-ended-iterator";
 import { Iterator, successors } from "./iterator";
@@ -12,10 +12,8 @@ export function iter<It extends IterInputType<any>>(it?: It): Iter<It> {
         return it.into_iter() as Iter<It>;
     } else if (is_arraylike(it)) {
         return new ArrayLike(it) as unknown as Iter<It>
-    } else if (it && 'next' in it) {
-        return new Iterable(it as any) as unknown as Iter<It>
     } else if (typeof it === 'function') {
-        return new Generator(it) as unknown as Iter<It>
+        return new Generator(it as any) as unknown as Iter<It>
     } else {
         return undefined as unknown as Iter<It>
     }

@@ -67,16 +67,16 @@ export class AssertError extends Error {
     }
 }
 
-// export function assert(is_true: boolean): void
-// export function assert(is_true: boolean, message: string): void;
-// export function assert(is_true: boolean, message: string, a: unknown, b: unknown): void;
-// export function assert(is_true: boolean, message?: string, a?: unknown, b?: unknown) {
-//     const base = arguments.length === 4 ? `Assert failed on ${a} === ${b}` : 'Assert Failed';
-//     if (!is_true) {
-//         const msg = is_some(message) ? `${base} ${message}` : base
-//         throw new AssertError(msg)
-//     }
-// }
+export function assert(is_true: boolean): void
+export function assert(is_true: boolean, message: string): void;
+export function assert(is_true: boolean, message: string, a: unknown, b: unknown): void;
+export function assert(is_true: boolean, message?: string, a?: unknown, b?: unknown) {
+    const base = arguments.length === 4 ? `Assert failed on ${a} === ${b}` : 'Assert Failed';
+    if (!is_true) {
+        const msg = is_some(message) ? `${base} ${message}` : base
+        throw new AssertError(msg)
+    }
+}
 
 export function assert_some<T>(value: Option<T>): asserts value is T {
     if (is_none(value)) {

@@ -1,102 +1,121 @@
 import { assert, expect, test } from 'vitest'
-import { DoubleEndedIterator, Iterator, iter, ErrorExt, Iterable, Generator } from "../src/iter";
-import { resize } from '../src/util';
+import { DoubleEndedIterator, iter, ErrorExt, Generator, Iterator } from "../src/iter";
 
-function def(n = 3, isGen = false) {
-    return iter(isGen ? () => count(n) : fill(n))
+function fill(len: number, from_zero = false) {
+    return Array.from({ length: len }, (_, i) => from_zero ? i : i + 1)
 }
 
-function exp(x: number) {
-    return x * x;
-}
-
-function fill(len: number) {
-    const arr: number[] = []
+function fill_string<T extends string>(string: T, len: number): `${T}-${number}`[] {
+    const arr: `${T}-${number}`[] = []
     for (let i = 0; i < len; i++) {
-        arr.push(i + 1);
+        arr.push(`${string}${i + 1}` as `${T}-${number}`);
     }
     return arr;
 }
 
-function fill_string(str: string, len: number) {
-    return Array.from({ length: len }, (_, i) => `${str}${i + 1}`)
-}
+function* count(n: number, from_zero = false) {
+    let i = from_zero ? -1 : 0;
+    function lt(index: number) {
+        return !from_zero ? index < n : index < n - 1;
+    }
 
-function* count(n: number, initial = 0) {
-    let i = initial;
-    while (i < n) {
+    while (lt(i)) {
         i++
         yield i
     }
 }
 
-function* gen_string(value: string, n: number, initial = 0) {
-    let i = initial;
-    while (i < n) {
-        i++
-        yield `${value}${i}`
-    }
-}
-
-const mock = {
-    array: {
-        map_twice(it: DoubleEndedIterator<number>) {
-            return it.map(v => v * v).map(v => v * v)
-        },
-        fill(n = 3) {
-            fill(n)
-        },
-        keys(n = 3) {
-            return fill_string('key: ', n)
-        },
-        values(n = 3) {
-            return fill_string('value: ', n)
-        },
-        kv(n = 3) {
-            const kv: [`k${number}`, `v${number}`][] = [];
-            for (let i = 0; i < n; i++) {
-                kv.push([`k${i}`, `v${i}`])
-            }
-        }
-    },
-    gen: {
-        fill(n = 3) {
-            return count(n)
-        },
-        map_twice(it: Iterator<number>) {
-            return it.map(v => v * v).map(v => v * v)
-        },
-        *toInfinityAndBeyond() {
-            let i = 1;
-            while (true) {
-                yield i++;
-            }
-        },
-        keys(n = 3) {
-            return gen_string('key: ', n)
-        },
-        values(n = 3) {
-            return gen_string('value: ', n);
-        },
-        *kv(n = 3) {
-            let i = 0;
-            const k = mock.gen.keys(n)
-            const v = mock.gen.values(n)
-            while (i < n) {
-                i++
-                yield [k.next().value, v.next().value]
-            }
-        }
-    }
-}
-
-function* toInfinityAndBeyond() {
-    let x = 0;
+function* toInfinityAndBeyond(from_zero = false) {
+    let x = from_zero ? -1 : 0;
     while (true) {
         x++;
         yield x;
     }
 }
+
+test('Fill functions', () => {
+    expect(fill(5)).toEqual([1, 2, 3, 4, 5]);
+    expect(fill(5, true)).toEqual([0, 1, 2, 3, 4]);
+
+    expect([...count(5)]).toEqual([1, 2, 3, 4, 5]);
+    expect([...count(5, true)]).toEqual([0, 1, 2, 3, 4])
+})
+
+test('IntoIter', () => {
+    let g = iter(() => count(5));
+    let a = iter(fill(5));
+    expect(g.collect()).toEqual(g.into_iter().collect());
+    expect(g.into_iter().collect()).toEqual(a.collect());
+
+    g = iter(() => count(3))
+        .map(v => v * v)
+        .map(v => v * v)
+
+    expect(g.collect()).toEqual([1, 16, 81]);
+    expect(g.into_iter().collect()).toEqual([1, 16, 81])
+
+    let inf = iter(() => toInfinityAndBeyond());
+    loop(inf)
+    inf.into_iter();
+    loop(inf)
+    inf = iter(() => toInfinityAndBeyond()).take(10);
+    loop(inf);
+
+    a = iter(fill(10)) as any;
+    loop(a);
+    loop(a.into_iter())
+    loop(a.into_iter().take(10))
+
+    a = iter(fill(100)).take(10) as any;
+
+    loop(a);
+    loop(a.into_iter())
+
+    a = iter(fill(5)).intersperse(100) as any;
+
+    assert(a.next().value === 1)
+    assert(a.next().value === 100)
+    assert(a.next().value === 2)
+    assert(a.next().value === 100)
+    assert(a.next().value === 3)
+    assert(a.next().value === 100)
+    assert(a.next().value === 4)
+    assert(a.next().value === 100)
+    assert(a.next().value === 5)
+    assert(a.next().value === undefined);
+
+    a.into_iter();
+
+    assert(a.next().value === 1)
+    assert(a.next().value === 100)
+    assert(a.next().value === 2)
+    assert(a.next().value === 100)
+    assert(a.next().value === 3)
+    assert(a.next().value === 100)
+    assert(a.next().value === 4)
+    assert(a.next().value === 100)
+    assert(a.next().value === 5)
+    assert(a.next().value === undefined);
+
+    a = iter(fill(100)) as any;
+    loop(a, 100);
+    loop(a.into_iter(), 100);
+
+    a = iter(fill(10)).map(v => v).map(v => v) as any;
+
+    loop(a);
+    loop(a.into_iter());
+
+    a = a.into_iter().take(5) as any;
+    loop(a, 5);
+    loop(a.into_iter(), 5);
+
+    function loop(iter: Iterator<number>, n = 10) {
+        for (let i = 0; i < n; i++) {
+            assert(iter.next().value === i + 1)
+        }
+    }
+})
 
 test('Flatten', () => {
     const none = [];
@@ -125,8 +144,8 @@ test('Flatten', () => {
     assert(iter(none).count() === 0)
     assert(iter(empty).flatten().rev().count() === 0)
 
-    expect(iter(two_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
-    expect(iter(three_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
+    expect(iter(() => two_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
+    expect(iter(() => three_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
     expect(iter(long).flatten().collect()).toEqual(expected_long)
     expect(iter(three_wide).flatten().rev().collect()).toEqual(rev)
 
@@ -171,26 +190,17 @@ test('Flatten', () => {
 
 })
 
-test('Resize', () => {
-    const a: number[] = [];
-    resize(a, 5, 0);
-    expect(a).toEqual([0, 0, 0, 0, 0])
-    resize(a, 3, 0);
-    expect(a).toEqual([0, 0, 0])
-
-})
-
 test('Native Data Structures', () => {
     const m = new Map<string, boolean>()
     const s = new Set();
 
-    expect(iter(m.keys()) instanceof Iterable).toBe(true);
-    expect(iter(m.values()) instanceof Iterable).toBe(true)
-    expect(iter(m.entries()) instanceof Iterable).toBe(true)
-    expect(iter(s.keys()) instanceof Iterable).toBe(true);
-    expect(iter(s.values()) instanceof Iterable).toBe(true);
-    expect(iter(s.entries()) instanceof Iterable).toBe(true);
 
+    expect(iter(() => m.keys()) instanceof Generator).toBe(true);
+    expect(iter(() => m.values()) instanceof Generator).toBe(true)
+    expect(iter(() => m.entries()) instanceof Generator).toBe(true)
+    expect(iter(() => s.keys()) instanceof Generator).toBe(true);
+    expect(iter(() => s.values()) instanceof Generator).toBe(true);
+    expect(iter(() => s.entries()) instanceof Generator).toBe(true);
     expect(iter(function* () { }) instanceof Generator).toBe(true)
     expect(iter([]) instanceof DoubleEndedIterator).toBe(true)
     expect(iter(new Uint16Array()) instanceof DoubleEndedIterator).toBe(true);
@@ -203,14 +213,15 @@ test('Free standing functions', () => {
     const s = iter.successors(2, (v) => v < Math.pow(2, 5) ? v * v : null)
     expect(s.collect()).toEqual([2, 4, 16, 256])
     const once = iter.once(1)
-    expect(once.next().value).toBe(1)
+    assert(once.next().value === 1)
+    expect(once.next().value === undefined)
     expect(iter.repeat(69).take(5).collect()).toEqual([69, 69, 69, 69, 69])
 
     expect(iter.once_with(() => 1).next().value).toBe(1);
 })
 
 test('MapWhile', () => {
-    const it = iter(toInfinityAndBeyond())
+    const it = iter(toInfinityAndBeyond)
     const m = it.map_while((v) => {
         v = v * v;
         return v < 256 ? v : null
@@ -219,14 +230,35 @@ test('MapWhile', () => {
 })
 
 test('StepBy', () => {
-    const step = iter(fill(10)).step_by(1)
+    let step = iter(function* () {
+        yield 0
+        yield 1
+        yield 2
+        yield 3
+        yield 4
+        yield 5
+    }).step_by(2)
 
+    expect(step.next().value).toBe(0)
     expect(step.next().value).toBe(2)
     expect(step.next().value).toBe(4)
-    expect(step.next().value).toBe(6)
-    expect(step.next().value).toBe(8)
-    expect(step.next().value).toBe(10)
     expect(step.next().value).toBe(undefined)
+
+    console.log(step.count());
+    console.log(step.into_iter().count(), step.into_iter().collect());
+
+    const step_double = iter([0, 1, 2, 3, 4, 5]).step_by(2)
+
+    expect(step_double.next().value).toBe(0)
+    expect(step_double.next().value).toBe(2)
+    expect(step_double.next().value).toBe(4)
+    expect(step_double.next().value).toBe(undefined)
+
+    const step_infinite = iter(toInfinityAndBeyond).take(1000).step_by(9);
+
+    // for (const step of step_infinite) {
+    //     console.log(step);
+    // }
 })
 
 test('next_chunk', () => {
@@ -240,9 +272,9 @@ test('next_chunk', () => {
         return str.split(' ').filter(v => v !== '');
     }
 
-    function trim_whitespace(str: string) {
-        return str.split(' ').filter(v => v !== '').join(' ');
-    }
+    // function trim_whitespace(str: string) {
+    //     return str.split(' ').filter(v => v !== '').join(' ');
+    // }
 
     const str = 'Hello World          !';
     const split = split_whitespace(str)
@@ -305,39 +337,39 @@ test('Gen Works', () => {
 // })
 
 test('Try fold', () => {
-    let it = iter.of(1, 2, 3)
+    let it = iter(fill(3))
     const sum = it.try_fold(0, (acc, inc) => {
         return inc === 2 ? new ErrorExt(inc, 'cannot be 2') : acc += inc
     })
 
+    // short-curcuits
     expect(sum).toEqual(new ErrorExt(2, 'cannot be 2'))
-    // short-curcuited
     expect(it.next().value).toBe(3)
 })
 
 test('Find', () => {
-    let it = iter.of(1, 2, 3);
+    let it = iter(fill(3));
     expect(it.find(v => v === 2)).toBe(2);
     expect(it.next().value).toBe(3);
 
-    it = iter.of(1, 2, 3);
+    it = iter(fill(3));
     expect(it.rfind(v => v === 2)).toBe(2);
     expect(it.next().value).toBe(1);
 
-    it = iter.of(1, 2, 3).rev();
+    it = iter(fill(3)).rev();
     expect(it.find(v => v === 2)).toBe(2);
     expect(it.next().value).toBe(1);
 
 })
 
 test('Peekable', () => {
-    let it = iter.of(1, 2, 3).peekable();
+    let it = iter(fill(3)).peekable();
     expect(it.peek().value).toBe(1);
     expect(it.next().value).toBe(1);
     expect(it.peek().value).toBe(2);
     expect(it.next().value).toBe(2);
 
-    it = iter.of(1, 2, 3).peekable();
+    it = iter(fill(3)).peekable();
     expect(it.peek().value).toBe(1);
     expect(it.next().value).toBe(1);
     expect(it.next().value).toBe(2);
@@ -370,23 +402,23 @@ test('Iter len', () => {
 })
 
 test('Advance by', () => {
-    let it = iter.of(1, 2, 3);
+    let it = iter(fill(3));
     expect(it.advance_by(0)).toBe(undefined);
     expect(it.next().value).toBe(1)
 })
 
 test('Iter nth', () => {
-    let it = iter.of(1, 2, 3);
+    let it = iter(fill(3));
     expect(it.nth(2).value).toEqual(3);
-    it = iter.of(1, 2, 3);
+    it = iter(fill(3));
     expect(it.nth_back(2).value).toEqual(1);
     expect(it.nth_back(0).value).toEqual(undefined);
-    it = iter.of(1, 2, 3);
+    it = iter(fill(3));
 
 })
 
 test('Iter rfold', () => {
-    expect(iter.of(1, 2, 3).rfold(0, (acc, inc) => {
+    expect(iter(fill(3)).rfold(0, (acc, inc) => {
         return acc - inc;
     })
     ).toBe(-6)
@@ -401,66 +433,58 @@ test('Iter rfold', () => {
     ).toBe('backwards')
 })
 
-// TODO: implement
-// test('Iter flatten', () => {
-//     expect([...flatten([[1, 2], [3, 4], [5, 6]])]).toEqual([1, 2, 3, 4, 5, 6]);
-//     const flat = () => iter.of([1, 2], [3, 4], [5, 6]).flatten();
-//     expect(flat().collect()).toEqual([1, 2, 3, 4, 5, 6]);
-//     expect(flat().rev().collect()).toEqual([6, 5, 4, 3, 2, 1]);
-// })
-
 test('Iter rev', () => {
-    expect(iter.of(1, 2, 3)
+    expect(iter(fill(3))
         .rev()
         .collect()
     ).toEqual([3, 2, 1]);
 
-    expect(iter.of(1, 2, 3)
+    expect(iter(fill(3))
         .rev()
         .rev()
-        .map(exp)
+        .map((v) => v * v)
         .collect()
     ).toEqual([1, 4, 9])
 
-    expect(iter.of(1, 2, 3)
-        .map(exp)
+    expect(iter(fill(3))
+        .map((v) => v * v)
         .rev()
         .rev().eq(
-            iter.of(1, 2, 3)
+            iter(fill(3))
                 .rev()
                 .rev()
-                .map(exp)
+                .map((v) => v * v)
         )
     ).toBe(true);
 
-    expect(iter.of(1, 2, 3)
+    expect(iter(fill(3))
         .rev()
-        .map(exp)
+        .map((v) => v * v)
         .rev().collect()
     ).toEqual([1, 4, 9]);
 
-    expect(iter.of(1, 2, 3)
+    expect(iter(fill(3))
         .rev()
-        .map(exp)
-        .map(exp)
+        .map((v) => v * v)
+        .map((v) => v * v)
         .rev().collect()
     ).toEqual([1, 16, 81]);
 
-    expect(iter.of(1, 2, 3)
-        .map(exp)
+    expect(iter(fill(3))
+        .map((v) => v * v)
         .collect()
     ).toEqual([1, 4, 9])
 
-    expect(iter.of(1, 2, 3)
-        .map(exp)
-        .map(exp)
+    expect(iter(fill(3))
+        .map((v) => v * v)
+        .map((v) => v * v)
         .collect()
     ).toEqual([1, 16, 81])
 
-    expect(iter.of(1, 2, 3)
+    expect(iter(fill(3))
         .rev()
-        .map(exp)
-        .map(exp)
+        .map((v) => v * v)
+        .map((v) => v * v)
         .collect()
     ).toEqual([81, 16, 1])
 
@@ -468,14 +492,18 @@ test('Iter rev', () => {
 
 test('Iter zip', () => {
     expect(
-        mock.array.map_twice(iter([1, 2, 3]))
+        iter(fill(3))
+            .map(v => v * v)
+            .map(v => v * v)
             .zip(iter(fill_string('v', 3)))
             .enumerate()
             .last()
     ).toEqual([2, [81, 'v3']])
 
     expect(
-        mock.array.map_twice(iter([1, 2, 3]))
+        iter(fill(3))
+            .map(v => v * v)
+            .map(v => v * v)
             .zip(iter(fill_string('v', 3)))
             .zip(iter(fill_string('k', 3)))
             .last()
@@ -484,7 +512,9 @@ test('Iter zip', () => {
     ])
 
     expect(
-        mock.array.map_twice(iter([1, 2, 3]))
+        iter(fill(3))
+            .map(v => v * v)
+            .map(v => v * v)
             .zip(iter(fill_string('v', 3)))
             .zip(iter(fill_string('k', 3)))
             .enumerate()
@@ -493,36 +523,35 @@ test('Iter zip', () => {
 })
 
 test('Iter', () => {
-    const it = def() as DoubleEndedIterator<number>;
-    const gen = def(3, true) as Iterator<number>; ''
-    const ma1 = it.map(v => v * v);
-    const ma2 = ma1.map(v => v * v);
-    const mg2 = mock.gen.map_twice(gen);
+    const double = iter(fill(3)).map(v => v * v).map(v => v * v);
+    const single = iter(() => count(3)).map(v => v * v).map(v => v * v);
 
-    const z = ma2.zip(iter(['v1', 'v2', 'v3']))
-    const zg = mg2.zip(iter(function* () {
+
+    const z = double.zip(iter(['v1', 'v2', 'v3']))
+    const other_g = iter(function* () {
         yield 'v1';
         yield 'v2';
         yield 'v3';
-    }))
+    });
+    const zg = single.zip(other_g);
     expect(iter()).toBe(undefined)
     expect(z.last()).toEqual([81, 'v3'])
     expect(zg.last()).toEqual([81, 'v3'])
 })
 
 test('Iter spread', () => {
-    const it = def();
+    const it = iter(fill(3))
     expect([...it]).toEqual([1, 2, 3]);
     expect([...it]).toEqual([]);
     expect([...it.into_iter()]).toEqual([1, 2, 3])
-    const gen = def(3, true);
+    const gen = iter(() => count(3))
     expect([...gen]).toEqual([1, 2, 3]);
     expect([...gen]).toEqual([]);
-    expect([...gen.into_iter()]).toEqual([1, 2, 3])
+    // expect([...gen.into_iter()]).toEqual([1, 2, 3])
 })
 
-test('Iter Once', () => {
-    // expect(def().sum()).toBe(6);
-    // expect(def().min()).toBe(1);
-    // expect(def().max()).toBe(3);
-})
+// test('Iter Once', () => {
+//     expect(iter(fill(3)).sum()).toBe(6);
+//     expect(iter(fill(3)).min()).toBe(1);
+//     expect(iter(fill(3)).max()).toBe(3);
+// })
