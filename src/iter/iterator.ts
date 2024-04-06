@@ -1,22 +1,16 @@
 import { iter } from ".";
-import * as Intrinsics from "../intrinsics";
-import { Err, Ok, Option, Result, is_error, is_some } from "../option";
-import { MustReturn, TODO } from "../util";
-import { Collection, ErrorExt, FoldFn, IterResult, NonZeroUsize, collect, done, iter_item, non_zero_usize, unzip } from "./shared";
-
-export type Item<It> =
-    It extends Iterable<infer T> ? T :
-    It extends Iterator<infer T> ? T :
-    never;
+import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
+import { type MustReturn, TODO } from "../util";
+import { ErrorExt, FoldFn, Item, IterResult, IteratorInputType, NonZeroUsize, SizeHint, collect, done, from_fn, into_iter, iter_item, non_zero_usize, unzip } from "./shared";
 
 export interface Iterator<T> {
+    // next(): Async extends false ? IterResult<T> : Promise<IterResult<T>>
     advance_by(n: number): Result<Ok, NonZeroUsize>
 }
 export abstract class Iterator<T> {
+
     abstract next(): IterResult<T>;
-    into_iter(): Iterator<T> {
-        return this
-    }
+    abstract into_iter(): Iterator<T>;
 
     advance_by(n: number): Result<Ok, NonZeroUsize> {
         for (let i = 0; i < n; i++) {
@@ -45,14 +39,18 @@ export abstract class Iterator<T> {
         return true
     }
 
+    array_chunks(n: number) {
+        return new ArrayChunks(this, n)
+    }
+
     chain<O extends Iterator<any>>(other: O): Iterator<T | Item<O>> {
         return new Chain(this, other)
     }
 
     collect(into?: undefined): T[];
-    collect<I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(into: I): ReturnType<I['from']>
-    collect<I extends (new (...args: any[]) => any) & { from(iter: Iterator<T>): any }>(into?: I): Collection<I> | T[] {
-        return collect(this, into as I)
+    collect<I extends new (it: Iterable<T>) => any>(into: I): InstanceType<I>
+    collect<I extends new (it: Iterable<T>) => any>(into?: I): InstanceType<I> | T[] {
+        return collect(this, into as any)
     }
 
     count() {
@@ -87,6 +85,10 @@ export abstract class Iterator<T> {
 
     flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): Iterator<O> {
         return new Flatten(this as any)
+    }
+
+    flat_map<B>(f: (value: T) => B): Iterator<B> {
+        return new FlatMap(this as any, f)
     }
 
     find(predicate: (value: T) => boolean): Option<T> {
@@ -173,6 +175,15 @@ export abstract class Iterator<T> {
         return this.next();
     }
 
+    partition(predicate: (value: T) => boolean): [T[], T[]] {
+        const trues = [];
+        const falses = [];
+        for (const v of this) {
+            predicate(v) ? trues.push(v) : falses.push(v);
+        }
+        return [trues, falses];
+    }
+
     peekable(): Iterator<T> & { peek: () => IterResult<T>; } {
         return new Peekable(this)
     }
@@ -228,7 +239,7 @@ export abstract class Iterator<T> {
         return unzip(this as IterableIterator<[K, V]>)
     }
 
-    zip<V>(other: Iterator<V>): Iterator<[T, V]> {
+    zip<V>(other: IteratorInputType<V>): Iterator<[T, V]> {
         return new Zip(this, other)
     }
 
@@ -238,7 +249,7 @@ export abstract class Iterator<T> {
 }
 
 export interface ExactSizeIterator<T> {
-    size_hint(): Intrinsics.SizeHint<number, number>
+    size_hint(): SizeHint<number, number>
 }
 export abstract class ExactSizeIterator<T> extends Iterator<T> {
     len(): number {
@@ -257,6 +268,11 @@ export class FusedIterator<T> extends Iterator<T> {
         this.#iter = iterable;
     }
 
+
+    override into_iter(): Iterator<T> {
+        return into_iter(this, [this.#iter])
+    }
+
     override next(): IterResult<T> {
         if (this.#done) {
             return done()
@@ -271,6 +287,41 @@ export class FusedIterator<T> extends Iterator<T> {
     }
 }
 
+class ArrayChunks<T> extends Iterator<T[]> {
+    #remainder: Option<T[]>
+    #n: number;
+    #iter: Iterator<T>;
+    constructor(iterable: Iterator<T>, n: number) {
+        super()
+        this.#iter = iterable
+        this.#n = n;
+    }
+
+    into_remainder() {
+        return this.#remainder;
+    }
+
+    override into_iter(): Iterator<T[]> {
+        this.#iter.into_iter();
+        return this;
+    }
+
+    override next(): IterResult<T[]> {
+        // ends iteration if reached end or cannot return 'n' elements
+        const chunk = this.#iter.next_chunk(this.#n);
+
+        if (chunk instanceof Error) {
+            if (this.#remainder) {
+                return done();
+            }
+            this.#remainder = chunk.get();
+            return done();
+        }
+
+        return iter_item(chunk)
+    }
+}
+
 class Chain<T1, T2> extends Iterator<T1 | T2> {
     #iter: Iterator<T1>
     #other: Iterator<T2>
@@ -281,9 +332,7 @@ class Chain<T1, T2> extends Iterator<T1 | T2> {
     }
 
     override into_iter(): Iterator<T1 | T2> {
-        this.#iter.into_iter();
-        this.#other.into_iter()
-        return this
+        return into_iter(this, [this.#iter, this.#other])
     }
 
     override next(): IterResult<T1 | T2> {
@@ -300,8 +349,7 @@ class Cycle<T> extends Iterator<T> {
     }
 
     override into_iter(): Iterator<T> {
-        this.#iter.into_iter();
-        return this
+        return into_iter(this, [this.#iter])
     }
 
     override next(): IterResult<T> {
@@ -324,9 +372,9 @@ class Enumerate<T> extends Iterator<[number, T]> {
         this.#iter = iterable;
     }
 
+
     override into_iter(): Iterator<[number, T]> {
-        this.#iter.into_iter()
-        return this
+        return into_iter(this, [this.#iter])
     }
 
     next() {
@@ -346,8 +394,8 @@ class Filter<T> extends Iterator<T> {
     }
 
     override into_iter(): Iterator<T> {
-        this.#iter.into_iter()
-        return this
+        return into_iter(this, [this.#iter])
+
     }
 
     override next(): IterResult<T> {
@@ -373,8 +421,9 @@ class Flatten<T> extends Iterator<T> {
         this.#outter = iterable;
     }
 
+
     override into_iter(): Iterator<T> {
-        return this;
+        return into_iter(this, [this.#outter]) as any
     }
 
     #next_loop(): IterResult<T> {
@@ -411,6 +460,30 @@ class Flatten<T> extends Iterator<T> {
     }
 }
 
+class FlatMap<A, B> extends Iterator<B> {
+    #flat: Flatten<A>
+    #f: (value: A) => B;
+    constructor(it: Iterator<Iterator<A>>, f: (value: A) => B) {
+        super()
+        this.#flat = new Flatten(it);
+        this.#f = f;
+    }
+
+
+    override next(): IterResult<B> {
+        const n = this.#flat.next();
+        if (n.done) {
+            return done();
+        }
+
+        return n.done ? done() : iter_item(this.#f(n.value))
+    }
+
+    override into_iter(): Iterator<B> {
+        return into_iter(this, [this.#flat])
+    }
+}
+
 class Inspect<T> extends Iterator<T> {
     #callback: (value: T) => void;
     #iter: Iterator<T>;
@@ -420,9 +493,10 @@ class Inspect<T> extends Iterator<T> {
         this.#callback = callback;
     }
 
+
+
     override into_iter(): Iterator<T> {
-        this.#iter.into_iter()
-        return this
+        return into_iter(this, [this.#iter])
     }
 
     override next(): IterResult<T> {
@@ -457,14 +531,15 @@ function intersperse_fold<I extends Iterator<any>, B>(
     })
 }
 
-function intersperse_size_hint<I extends Iterator<any>>(iter: I, needs_sep: boolean): Intrinsics.SizeHint {
+function intersperse_size_hint<I extends Iterator<any>>(iter: I, needs_sep: boolean): SizeHint {
     let [lo, hi] = iter.size_hint();
-    const next_is_elem = !needs_sep;
-    const next_is_elem_int = next_is_elem ? 1 : 0;
-    lo = Intrinsics.saturating_add(Intrinsics.saturating_sub(lo, next_is_elem_int, 'usize'), lo, 'usize')
-    if (is_some(hi)) {
-        hi = Intrinsics.checked_add(Intrinsics.saturating_sub(hi, next_is_elem_int, 'usize'), hi, 'usize')
-    }
+    const next_is_elem = !needs_sep ? 1 : 0;
+    lo = (lo - next_is_elem) + lo
+    // lo = Intrinsics.saturating_add(Intrinsics.saturating_sub(lo, next_is_elem_int, 'usize'), lo, 'usize')
+    // TODO: implement this check
+    // if (is_some(hi)) {
+    //     hi = Intrinsics.checked_add(Intrinsics.saturating_sub(hi, next_is_elem_int, 'usize'), hi, 'usize')
+    // }
     return [lo, hi];
 }
 
@@ -478,8 +553,10 @@ class Intersperse<T> extends Iterator<T> {
         this.#separator = separator;
     }
 
+
     override into_iter(): Iterator<T> {
-        return this;
+        this.#needs_sep = false;
+        return into_iter(this, [this.#iter])
     }
 
     override next(): IterResult<T> {
@@ -512,8 +589,10 @@ class IntersperseWith<T> extends Iterator<T> {
         this.#gen = gen;
     }
 
+
+
     override into_iter(): Iterator<T> {
-        return this;
+        return into_iter(this, [this.#iter])
     }
 
     override next(): IterResult<T> {
@@ -540,9 +619,10 @@ class Map<A, B> extends Iterator<B> {
         this.#callback = callback;
     }
 
+
+
     override into_iter(): Iterator<B> {
-        this.#iter.into_iter()
-        return this
+        return into_iter(this, [this.#iter])
     }
 
     next() {
@@ -559,6 +639,11 @@ class MapWhile<A, B> extends Iterator<B> {
         this.#iter = iterable
         this.#fn = callback;
     }
+
+    override into_iter(): Iterator<B> {
+        return into_iter(this, [this.#iter])
+    }
+
     override next(): IterResult<B> {
         const n = this.#iter.next();
         if (n.done) {
@@ -578,13 +663,12 @@ class Skip<T> extends Iterator<T> {
         this.#n = n;
     }
 
-    override size_hint(): Intrinsics.SizeHint<number, number> {
-        return this.#iter.size_hint() as Intrinsics.SizeHint<number, number>
+    override size_hint(): SizeHint<number, number> {
+        return this.#iter.size_hint() as SizeHint<number, number>
     }
 
     override into_iter(): Iterator<T> {
-        this.#iter.into_iter();
-        return this
+        return into_iter(this, [this.#iter])
     }
 
     override next(): IterResult<T> {
@@ -626,8 +710,9 @@ class Skip<T> extends Iterator<T> {
         if (this.#n > 0) {
             const skip = this.#n;
             this.#n = 0;
-
-            n = Intrinsics.usize.checked_add(skip, n)!
+            // TODO: implement Number.MAX_SAFE_INTEGER bounds check
+            n = skip + n
+            // n = Intrinsics.usize.checked_add(skip, n)!
             return !is_some(n) ? this.#iter.nth(skip - 1) : this.#iter.nth(n)
         } else {
             return this.#iter.nth(n)
@@ -679,59 +764,129 @@ class SkipWhile<T> extends Iterator<T> {
     override next(): IterResult<T> {
         return TODO();
     }
+
+    override into_iter(): Iterator<T> {
+        return this
+    }
 }
 
 class StepBy<T> extends Iterator<T> {
     #iter: Iterator<T>;
-    #step: number
+    #step: number;
+    #first_take: boolean;
     constructor(iterable: Iterator<T>, step: number) {
         super();
         this.#iter = iterable;
-        this.#step = step;
+        this.#step = Math.max(step - 1, 0);
+        this.#first_take = true;
     }
 
     override into_iter(): Iterator<T> {
-        return this;
-    }
-    override next(): IterResult<T> {
-        for (let i = 0; i < this.#step; i++) {
-            this.#iter.next()
-        }
-        return this.#iter.next();
-    }
-}
-
-class Successors<T> extends Iterator<T> {
-    #next: Option<T>;
-    #succ: (value: T) => Option<T>;
-    constructor(first: Option<T>, succ: (value: T) => Option<T>) {
-        super()
-        this.#next = first;
-        this.#succ = succ;
-
+        return into_iter(this, [this.#iter])
     }
 
     override next(): IterResult<T> {
-        const item = this.#next
-        if (!is_some(item)) {
-            return done();
-        }
-        const n = this.#succ(item)
-        this.#next = n;
-        return iter_item(item)
-    }
-
-    override into_iter(): Iterator<T> {
-        return this;
+        const step_size = this.#first_take ? 0 : this.#step;
+        this.#first_take = false;
+        return this.#iter.nth(step_size);
     }
 
     override size_hint(): [number, Option<number>] {
-        return is_some(this.#next) ? [1, null] : [0, 0]
-    }
-}
+        function first_size(step: number) {
+            return (n: number) => n === 0 ? 0 : Math.floor(1 + (n - 1) / (step + 1));
+        }
 
-export function successors<T>(first: T, succ: (value: T) => Option<T>) {
-    return new Successors(first, succ)
+        function other_size(step: number) {
+            return (n: number) => Math.floor(n / (step + 1));
+        }
+
+        const [low, high] = this.#iter.size_hint();
+
+        const f = this.#first_take ? first_size(this.#step) : other_size(this.#step);
+
+        return [f(low), is_some(high) ? f(high) : null]
+    }
+
+    override nth(n: number): IterResult<T> {
+        n = Math.floor(n);
+
+        if (this.#first_take) {
+            this.#first_take = false;
+            const first = this.#iter.next();
+            if (n === 0) {
+                return first;
+            }
+            n--;
+        }
+        let step = this.#step + 1;
+
+        if (n === Number.MAX_SAFE_INTEGER) {
+            return this.#iter.nth(step - 1)
+        } else {
+            n++;
+        }
+
+        while (true) {
+            // let mul = checked_mul(n * step);
+            // let mul = n * step;
+            // {
+            //     if intrinsics::likely(mul.is_some()) {
+            //         return self.iter.nth(mul.unwrap() - 1);
+            //     }
+            // }
+            const div_n = Math.floor(Number.MAX_SAFE_INTEGER / n);
+            const div_step = Math.floor(Number.MAX_SAFE_INTEGER / step);
+            const nth_n = div_n * n;
+            const nth_step = div_step * step;
+
+            let nth;
+            if (nth_n > nth_step) {
+                step -= div_n
+                nth = nth_n
+            } else {
+                n -= div_step;
+                nth = nth_step;
+            }
+
+            return this.#iter.nth(nth - 1)
+        }
+    }
+
+    override fold<B>(initial: B, fold: FoldFn<T, B>): B {
+        function nth(iter: Iterator<T>, step: number) {
+            return () => iter.nth(step);
+        }
+
+        if (this.#first_take) {
+            this.#first_take = false;
+            const n = this.#iter.next();
+            if (n.done) {
+                return initial;
+            } else {
+                initial = fold(initial, n.value)
+            }
+        }
+
+        return from_fn(nth(this.#iter, this.#step)).fold(initial, fold as any)
+    }
+
+    override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+        function nth(iter: Iterator<T>, step: number) {
+            return () => iter.nth(step);
+        }
+
+        if (this.#first_take) {
+            this.#first_take = false;
+            const n = this.#iter.next();
+            if (n.done) {
+                return initial;
+            } else {
+                initial = fold(initial, n.value) as B;
+            }
+        }
+        return from_fn(nth(this.#iter, this.#step)).try_fold(initial, fold as any)
+
+    }
 }
 
 class Take<T> extends Iterator<T> {
@@ -744,8 +899,7 @@ class Take<T> extends Iterator<T> {
     }
 
     override into_iter(): Iterator<T> {
-        this.#iter.into_iter()
-        return this
+        return into_iter(this, [this.#iter])
     }
 
     override next(): IterResult<T> {
@@ -817,8 +971,7 @@ class TakeWhile<T> extends Iterator<T> {
     }
 
     override into_iter(): Iterator<T> {
-        this.#iter.into_iter()
-        return this
+        return into_iter(this, [this.#iter])
     }
 
     override next(): IterResult<T> {
@@ -842,6 +995,7 @@ class Peekable<T> extends Iterator<T> {
         super()
         this.#iter = iterable;
     }
+
     #take() {
         const peeked = this.#peeked;
         this.#peeked = null;
@@ -849,8 +1003,7 @@ class Peekable<T> extends Iterator<T> {
     }
 
     override into_iter(): Iterator<T> {
-        this.#iter.into_iter()
-        return this
+        return into_iter(this, [this.#iter])
     }
 
     override next(): IterResult<T> {
@@ -924,16 +1077,15 @@ class Zip<K, V> extends Iterator<[K, V]> {
     #iter: Iterator<K>;
     #other: Iterator<V>;
 
-    constructor(iterable: Iterator<K>, other: Iterator<V>) {
+    constructor(iterable: Iterator<K>, other: IteratorInputType<V>) {
         super()
         this.#iter = iterable;
-        this.#other = other;
+        this.#other = other as Iterator<V>;
     }
 
     override into_iter(): Iterator<[K, V]> {
-        this.#iter.into_iter();
-        this.#other.into_iter();
-        return this;
+        return into_iter(this, [this.#iter, this.#other])
+
     }
 
     override next(): IterResult<[K, V]> {
@@ -943,3 +1095,72 @@ class Zip<K, V> extends Iterator<[K, V]> {
         return (k.done || v.done) ? done<[K, V]>() : iter_item([k.value, v.value])
     }
 }
+//* --- free standing functions ---
+class Successors<T> extends Iterator<T> {
+    #next: Option<T>;
+    #succ: (value: T) => Option<T>;
+    constructor(first: Option<T>, succ: (value: T) => Option<T>) {
+        super()
+        this.#next = first;
+        this.#succ = succ;
+    }
+
+
+    override into_iter(): Iterator<T> {
+        return this;
+    }
+
+    override next(): IterResult<T> {
+        const item = this.#next
+        if (!is_some(item)) {
+            return done();
+        }
+        const n = this.#succ(item)
+        this.#next = n;
+        return iter_item(item)
+    }
+
+    override size_hint(): [number, Option<number>] {
+        return is_some(this.#next) ? [1, null] : [0, 0]
+    }
+}
+
+export function successors<T>(first: T, succ: (value: T) => Option<T>) {
+    return new Successors(first, succ)
+}
+
+export type IteratorAdapter<T, T2 = any> = {
+    chain: Chain<T, T2>;
+    cycle: Cycle<T>;
+    enumerate: Enumerate<T>;
+    flatmap: FlatMap<T, T2>;
+    flatten: Flatten<T>;
+    filter: Filter<T>;
+    map: Map<T, T2>;
+    mapwhile: MapWhile<T, T2>;
+    skip: Skip<T>;
+    skipwhile: SkipWhile<T>;
+    step: StepBy<T>;
+    take: Take<T>;
+    takewhile: TakeWhile<T>;
+    peekable: Peekable<T>;
+    zip: Zip<T, T2>;
+}
+
+export const IteratorAdapters = {
+    Chain,
+    Cycle,
+    Enumerate,
+    FlatMap,
+    Flatten,
+    Filter,
+    Map,
+    MapWhile,
+    Skip,
+    SkipWhile,
+    StepBy,
+    Take,
+    TakeWhile,
+    Peekable,
+    Zip,
+} as const

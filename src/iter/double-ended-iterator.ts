@@ -1,19 +1,17 @@
-import type { Err, Ok, Option, Result } from "../option";
-import { is_error, is_some } from '../option'
-import { type IterResult, type FoldFn, ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize, } from "./shared";
-import { type Item, Iterator } from './iterator'
-import type { SizeHint } from '../intrinsics'
+import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
+import { type Item, type IterResult, type SizeHint, type FoldFn, ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize, from_fn, into_iter, DoubleEndedIteratorInputType, IteratorInputType } from "./shared";
+import { Iterator } from './iterator'
 import { TODO, assert } from "../util";
 import { iter } from ".";
-
 
 export interface DoubleEndedIterator<T> {
     advance_back_by(n: number): Result<Ok<undefined>, NonZeroUsize>
     chain<O extends DoubleEndedIterator<any>>(other: O): DoubleEndedIterator<T | Item<O>>;
+    zip<V>(other: any): DoubleEndedIterator<[T, V]>
     into_iter(): DoubleEndedIterator<T>;
 }
-
 export abstract class DoubleEndedIterator<T> extends Iterator<T> {
+
     abstract next_back(): IterResult<T>;
 
     advance_back_by(n: number): Result<Ok, NonZeroUsize> {
@@ -29,8 +27,8 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new Chain(this, other)
     }
 
-    override cycle(): DoubleEndedIterator<T> {
-        return new Cycle(this)
+    override cycle(): ExactSizeDoubleEndedIterator<T> {
+        return new Cycle(this as unknown as ExactSizeDoubleEndedIterator<T>)
     }
 
     override enumerate(): DoubleEndedIterator<[number, T]> {
@@ -43,6 +41,10 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
 
     override flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): DoubleEndedIterator<O> {
         return new Flatten(this as any);
+    }
+
+    override flat_map<B>(f: (value: T) => B): Iterator<B> {
+        return new FlatMap(this as any, f)
     }
 
     override fuse(): DoubleEndedIterator<T> {
@@ -98,10 +100,6 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new Skip(this, n)
     }
 
-    override step_by(n: number): DoubleEndedIterator<T> {
-        return new StepBy(this, n);
-    }
-
     override take(n: number): DoubleEndedIterator<T> {
         return new Take(this as unknown as ExactSizeDoubleEndedIterator<T>, n);
     }
@@ -123,21 +121,27 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return acc as Result<B, Err>;
     }
 
-    override zip<V>(other: DoubleEndedIterator<V>): DoubleEndedIterator<[T, V]> {
-        return new Zip(this, other)
+    override zip<V>(other: IteratorInputType<V>): DoubleEndedIterator<[T, V]> {
+        return new Zip(this, other as any)
     }
 }
 
 export interface ExactSizeDoubleEndedIterator<T> {
     size_hint(): SizeHint<number, number>;
     rev(): ExactSizeDoubleEndedIterator<T>;
+    step_by(n: number): ExactSizeDoubleEndedIterator<T>;
 }
+
 export abstract class ExactSizeDoubleEndedIterator<T> extends DoubleEndedIterator<T> {
     len(): number {
         return this.size_hint()[1];
     }
     is_empty(): boolean {
         return this.len() === 0;
+    }
+
+    override step_by(n: number): ExactSizeDoubleEndedIterator<T> {
+        return new StepBy(this, n);
     }
 }
 
@@ -148,6 +152,7 @@ export class FusedDoubleEndedIterator<T> extends DoubleEndedIterator<T> {
         super();
         this.#iter = iterable;
     }
+
 
     override next(): IterResult<T> {
         if (this.#done) {
@@ -198,14 +203,14 @@ class Chain<T1, T2> extends DoubleEndedIterator<T1 | T2> {
     }
 
     override next_back(): IterResult<T1 | T2> {
-        const n = this.#iter.next_back();
-        return !n.done ? n : this.#other.next_back();
+        const n = this.#other.next_back();
+        return !n.done ? n : this.#iter.next_back();
     }
 }
 
-class Cycle<T> extends DoubleEndedIterator<T> {
-    #iter: DoubleEndedIterator<T>;
-    constructor(iterable: DoubleEndedIterator<T>) {
+class Cycle<T> extends ExactSizeDoubleEndedIterator<T> {
+    #iter: ExactSizeDoubleEndedIterator<T>;
+    constructor(iterable: ExactSizeDoubleEndedIterator<T>) {
         super();
         this.#iter = iterable;
     }
@@ -248,7 +253,8 @@ class Enumerate<T> extends DoubleEndedIterator<[number, T]> {
     }
 
     override into_iter(): DoubleEndedIterator<[number, T]> {
-        this.#iter.into_iter()
+        this.#iter.into_iter();
+        this.#index = -1;
         return this
     }
 
@@ -324,55 +330,14 @@ class Flatten<T> extends DoubleEndedIterator<T> {
         return this;
     }
 
-    #front_loop(it: DoubleEndedIterator<T>): IterResult<T> {
-
-        let n = it.next();
-
-        if (n.done) {
-            // advance outter
-            const n2 = this.#outter.next();
-            if (n2.done) {
-                // outter is done
-                return done();
-            } else {
-                // just advanced outter, so return new n;
-                this.#frontiter = iter(n2.value);
-                return this.#frontiter.next()
-            }
-
-        } else {
-            return n
-        }
-    }
-
-    #back_loop(it: DoubleEndedIterator<T>): IterResult<T> {
-
-        let n = it.next_back();
-
-        if (n.done) {
-            // advance outter
-            const n2 = this.#outter.next_back();
-            if (n2.done) {
-                // outter is done
-                return done();
-            } else {
-                // just advanced outter, so return new n;
-                this.#backiter = iter(n2.value);
-                return this.#backiter.next_back()
-            }
-
-        } else {
-            return n
-        }
-    }
-
-
     override next(): IterResult<T> {
         if (!this.#frontiter) {
             const n = this.#outter.next().value;
+
             if (!n) {
-                return done()
+                return this.#backiter ? this.#backiter.next() : done()
             }
+
             this.#frontiter = iter(n);
         }
 
@@ -385,16 +350,16 @@ class Flatten<T> extends DoubleEndedIterator<T> {
                 return done()
             }
         }
+
         return n
-        //     return n
-        // }
     }
 
     override next_back(): IterResult<T> {
         if (!this.#backiter) {
+
             const n = this.#outter.next_back().value;
             if (!n) {
-                return done()
+                return this.#frontiter ? this.#frontiter.next_back() : done()
             }
             this.#backiter = iter(n);
         }
@@ -410,13 +375,80 @@ class Flatten<T> extends DoubleEndedIterator<T> {
         }
 
         return n
-        // if (n.done) {
-        //     return this.next();
-        // } else {
-        //     return n
-        // }
+    }
+
+    #front_loop(it: DoubleEndedIterator<T>): IterResult<T> {
+        let n = it.next();
+
+        if (n.done) {
+            // advance outter
+            const outter = this.#outter.next();
+            if (outter.done) {
+                // outter is done
+                return done();
+            } else {
+                it = iter(outter.value);
+                // just advanced outter, so return new n;
+                this.#frontiter = it;
+                return it.next()
+            }
+
+        } else {
+            return n
+        }
+    }
+
+    #back_loop(it: DoubleEndedIterator<T>): IterResult<T> {
+
+        let n = it.next_back();
+
+        if (n.done) {
+            // advance outter
+            const outter = this.#outter.next_back();
+            if (outter.done) {
+                // outter is done
+                return done();
+            } else {
+                // just advanced outter, so return new n;
+                this.#backiter = iter(outter.value);
+                return this.#backiter.next_back()
+            }
+
+        } else {
+            return n
+        }
     }
 }
+
+class FlatMap<A, B> extends DoubleEndedIterator<B> {
+    #flat: Flatten<A>
+    #f: (value: A) => B;
+    constructor(it: DoubleEndedIterator<DoubleEndedIterator<A>>, f: (value: A) => B) {
+        super()
+        this.#flat = new Flatten(it);
+        this.#f = f;
+    }
+
+    override next(): IterResult<B> {
+        const n = this.#flat.next();
+        if (n.done) {
+            return done();
+        }
+
+        return n.done ? done() : iter_item(this.#f(n.value))
+    }
+
+    override next_back(): IterResult<B> {
+        const n = this.#flat.next_back();
+        if (n.done) {
+            return done();
+        }
+
+        return n.done ? done() : iter_item(this.#f(n.value))
+
+    }
+}
+
 class Inspect<T> extends DoubleEndedIterator<T> {
     #callback: (value: T) => void;
     #iter: DoubleEndedIterator<T>;
@@ -454,7 +486,7 @@ class Map<A, B> extends DoubleEndedIterator<B> {
     }
 
     override into_iter(): DoubleEndedIterator<B> {
-        this.#iter.into_iter()
+        this.#iter.into_iter();
         return this
     }
 
@@ -477,6 +509,7 @@ class MapWhile<A, B> extends DoubleEndedIterator<B> {
         this.#iter = iterable
         this.#fn = callback;
     }
+
     override next(): IterResult<B> {
         const n = this.#iter.next();
         if (n.done) {
@@ -512,6 +545,7 @@ class Rev<T> extends DoubleEndedIterator<T> {
     next() {
         return this.#iter.next_back()
     }
+
     next_back() {
         return this.#iter.next();
     }
@@ -522,6 +556,10 @@ class Repeat<T> extends DoubleEndedIterator<T> {
     constructor(value: T) {
         super()
         this.#element = value;
+    }
+
+    override into_iter(): DoubleEndedIterator<T> {
+        return this
     }
 
     override next(): IterResult<T> {
@@ -634,7 +672,6 @@ class Skip<T> extends ExactSizeDoubleEndedIterator<T> {
     }
 
     override next_back(): IterResult<T> {
-        console.log('Skip:: next_back', this.len())
         return this.len() > 0 ? this.#iter.next_back() : done();
     }
 
@@ -769,12 +806,37 @@ class Skip<T> extends ExactSizeDoubleEndedIterator<T> {
 }
 
 class SkipWhile<T> extends DoubleEndedIterator<T> {
+    #iter: DoubleEndedIterator<T>;
+    #predicate: (value: T) => boolean
+    #found: boolean;
+    constructor(iter: DoubleEndedIterator<T>, predicate: (value: T) => boolean) {
+        super();
+        this.#iter = iter;
+        this.#predicate = predicate;
+        this.#found = false;
+    }
+
     override into_iter(): DoubleEndedIterator<T> {
+        this.#iter.into_iter();
         return this;
     }
 
     override next(): IterResult<T> {
-        return TODO()
+        if (!this.#found) {
+            while (!this.#found) {
+                const n = this.#iter.next();
+                if (n.done) {
+                    return n
+                } else if (this.#predicate(n.value)) {
+                    this.#found = true;
+                    return n;
+                }
+            }
+        } else {
+            return this.#iter.next();
+        }
+        //! not reachable
+        return done();
     }
 
     override next_back(): IterResult<T> {
@@ -782,43 +844,186 @@ class SkipWhile<T> extends DoubleEndedIterator<T> {
     }
 }
 
-class StepBy<T> extends DoubleEndedIterator<T> {
-    #iter: DoubleEndedIterator<T>;
-    #step: number
-    constructor(iterable: DoubleEndedIterator<T>, step: number) {
+class StepBy<T> extends ExactSizeDoubleEndedIterator<T> {
+    #iter: ExactSizeDoubleEndedIterator<T>;
+    #step: number;
+    #first_take: boolean;
+    constructor(iter: ExactSizeDoubleEndedIterator<T>, step: number) {
         super();
-        this.#iter = iterable;
-        this.#step = step;
+        this.#iter = iter;
+        this.#step = Math.max(step - 1, 0);
+        this.#first_take = true;
+    }
+
+    override into_iter(): DoubleEndedIterator<T> {
+        this.#iter.into_iter();
+        return this;
     }
 
     override next(): IterResult<T> {
-        for (let i = 0; i < this.#step; i++) {
-            this.#iter.next()
-        }
-        return this.#iter.next();
+        const step_size = this.#first_take ? 0 : this.#step;
+        this.#first_take = false;
+        return this.#iter.nth(step_size);
     }
 
     override next_back(): IterResult<T> {
-        for (let i = 0; i < this.#step; i++) {
-            this.#iter.next_back()
-        }
-        return this.#iter.next_back();
+        return this.#iter.nth_back(this.#next_back_index());
+    }
 
+    #next_back_index() {
+        const rem = Math.floor(this.#iter.len() % (this.#step + 1));
+        if (this.#first_take) {
+            return rem === 0 ? this.#step : rem - 1
+        } else {
+            return rem;
+        }
+    }
+
+    override size_hint(): [number, number] {
+        function first_size(step: number) {
+            return (n: number) => n === 0 ? 0 : Math.floor(1 + (n - 1) / (step + 1));
+        }
+
+        function other_size(step: number) {
+            return (n: number) => Math.floor(n / (step + 1));
+        }
+
+        const [low, high] = this.#iter.size_hint();
+        assert(is_some(high))
+
+        const f = this.#first_take ? first_size(this.#step) : other_size(this.#step);
+        return [f(low), f(high!)]
+    }
+
+    override nth(n: number): IterResult<T> {
+        n = Math.floor(n);
+
+        if (this.#first_take) {
+            this.#first_take = false;
+            const first = this.#iter.next();
+            if (n === 0) {
+                return first;
+            }
+            n--;
+        }
+        let step = this.#step + 1;
+
+        if (n === Number.MAX_SAFE_INTEGER) {
+            return this.#iter.nth(step - 1)
+        } else {
+            n++;
+        }
+
+        while (true) {
+            // let mul = checked_mul(n * step);
+            // let mul = n * step;
+            // {
+            //     if intrinsics::likely(mul.is_some()) {
+            //         return self.iter.nth(mul.unwrap() - 1);
+            //     }
+            // }
+            const div_n = Math.floor(Number.MAX_SAFE_INTEGER / n);
+            const div_step = Math.floor(Number.MAX_SAFE_INTEGER / step);
+            const nth_n = div_n * n;
+            const nth_step = div_step * step;
+
+            let nth;
+            if (nth_n > nth_step) {
+                step -= div_n
+                nth = nth_n
+            } else {
+                n -= div_step;
+                nth = nth_step;
+            }
+
+            return this.#iter.nth(nth - 1)
+        }
+    }
+
+    override nth_back(n: number): IterResult<T> {
+        // n = n.saturating_mul(self.step + 1).saturating_add(self.next_back_index());
+        n = (n * (this.#step + 1)) + this.#next_back_index();
+        return this.#iter.nth_back(n)
+    }
+
+    override fold<B>(initial: B, fold: FoldFn<T, B>): B {
+        function nth(iter: Iterator<T>, step: number) {
+            return () => iter.nth(step);
+        }
+
+        if (this.#first_take) {
+            this.#first_take = false;
+            const n = this.#iter.next();
+            if (n.done) {
+                return initial;
+            } else {
+                initial = fold(initial, n.value)
+            }
+        }
+
+        return from_fn(nth(this.#iter, this.#step)).fold(initial, fold as any)
+    }
+
+    override rfold<B>(initial: B, fold: FoldFn<T, B>): B {
+        function nth_back(iter: ExactSizeDoubleEndedIterator<T>, step: number) {
+            return () => iter.nth_back(step)
+        }
+
+        const n = this.next_back();
+        if (n.done) {
+            return initial;
+        } else {
+            let acc = fold(initial, n.value);
+            return from_fn(nth_back(this.#iter, this.#step)).fold(acc, fold as any)
+        }
+    }
+
+    override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+        function nth(iter: Iterator<T>, step: number) {
+            return () => iter.nth(step);
+        }
+
+        if (this.#first_take) {
+            this.#first_take = false;
+            const n = this.#iter.next();
+            if (n.done) {
+                return initial;
+            } else {
+                initial = fold(initial, n.value) as B;
+            }
+        }
+        return from_fn(nth(this.#iter, this.#step)).try_fold(initial, fold as any)
+    }
+
+    override try_rfold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+        function nth_back(iter: ExactSizeDoubleEndedIterator<T>, step: number) {
+            return () => iter.nth_back(step)
+        }
+
+        const n = this.next_back();
+        if (n.done) {
+            return initial;
+        } else {
+            let acc = fold(initial, n.value);
+            return from_fn(nth_back(this.#iter, this.#step)).try_fold(acc as any, fold as any)
+        }
     }
 }
 
 class Take<T> extends DoubleEndedIterator<T> {
     #iter: ExactSizeDoubleEndedIterator<T>;
+    #start: number;
     #n: number
     constructor(iterable: ExactSizeDoubleEndedIterator<T>, n: number) {
         super();
         this.#iter = iterable;
+        this.#start = n;
         this.#n = n;
     }
 
     override into_iter(): DoubleEndedIterator<T> {
-        this.#iter.into_iter()
-        return this
+        this.#n = this.#start;
+        return into_iter(this as any, [this.#iter]) as any
     }
 
     override next(): IterResult<T> {
@@ -827,6 +1032,16 @@ class Take<T> extends DoubleEndedIterator<T> {
             return this.#iter.next();
         } else {
             return done()
+        }
+    }
+
+    override next_back(): IterResult<T> {
+        if (this.#n === 0) {
+            return done()
+        } else {
+            let n = this.#n;
+            this.#n -= 1
+            return this.#iter.nth_back(this.#iter.len() - n)
         }
     }
 
@@ -881,9 +1096,8 @@ class Take<T> extends DoubleEndedIterator<T> {
     override advance_back_by(n: number): Result<Ok, NonZeroUsize> {
         // const trim_inner = usize.saturating_sub(this.#iter.len(), this.#n);
         // let advance_by = usize.saturating_add(trim_inner, n);
-
-        const trim_inner = this.#iter.len() + this.#n
-        let advance_by = trim_inner + n
+        const trim_inner = this.#iter.len() + this.#n;
+        let advance_by = trim_inner + n;
         const result = this.#iter.advance_back_by(advance_by);
         const remainder = is_error(result) ? result.get() : 0;
 
@@ -893,22 +1107,14 @@ class Take<T> extends DoubleEndedIterator<T> {
         return non_zero_usize(n - advance_by);
     }
 
-    override next_back(): IterResult<T> {
-        if (this.#n === 0) {
-            return done()
-        } else {
-            let n = this.#n;
-            this.#n -= 1
-            return this.#iter.nth_back(this.#iter.len() + n)
-            // return this.#iter.nth_back(usize.saturating_sub(this.#iter.len(), n))
-        }
-    }
+
 
     override nth_back(n: number): IterResult<T> {
         const len = this.#iter.len();
         if (this.#n < n) {
-            let m = len + this.#n
             // let m = usize.saturating_sub(len, this.#n) + n;
+            let m = len + this.#n + n;
+
             this.#n -= n + 1;
             return this.#iter.nth_back(m);
         } else {
@@ -1087,15 +1293,16 @@ class Zip<K, V> extends DoubleEndedIterator<[K, V]> {
     #iter: DoubleEndedIterator<K>;
     #other: DoubleEndedIterator<V>;
 
-    constructor(iterable: DoubleEndedIterator<K>, other: DoubleEndedIterator<V>) {
+    constructor(iterable: DoubleEndedIterator<K>, other: DoubleEndedIteratorInputType<V>) {
         super()
         this.#iter = iterable;
-        this.#other = other;
+        this.#other = iter(other) as DoubleEndedIterator<V>;
     }
 
     override into_iter(): DoubleEndedIterator<[K, V]> {
-        this.#iter.into_iter();
-        this.#other.into_iter();
+
+        this.#other.into_iter()
+        this.#iter.into_iter()
         return this;
     }
 
@@ -1115,20 +1322,29 @@ class Zip<K, V> extends DoubleEndedIterator<[K, V]> {
 }
 
 class Once<T> extends DoubleEndedIterator<T> {
-    #item: Option<T>;
+    #item: T;
+    #taken: boolean;
     constructor(value: T) {
         super()
         this.#item = value;
+        this.#taken = false;
     }
 
     override next(): IterResult<T> {
-        const item = this.#item
-        this.#item = null;
-        return is_some(item) ? iter_item(item) : done();
+        if (this.#taken) {
+            return done()
+        }
+        this.#taken = true;
+        return iter_item(this.#item)
     }
 
     override next_back(): IterResult<T> {
-        return this.next();
+        if (this.#taken) {
+            return done()
+        }
+        this.#taken = true;
+        return iter_item(this.#item)
+
     }
 
     override into_iter(): DoubleEndedIterator<T> {
@@ -1172,4 +1388,41 @@ export function repeat<T>(value: T) {
 
 export function repeat_with<T>(gen: () => T) {
     return new RepeatWith(gen)
+}
+
+export type DoubleEndedIteratorAdapter<T, T2 = any> = {
+    chain: Chain<T, T2>;
+    cycle: Cycle<T>;
+    enumerate: Enumerate<T>;
+    flatmap: FlatMap<T, T2>;
+    flatten: Flatten<T>;
+    filter: Filter<T>;
+    map: Map<T, T2>;
+    mapwhile: MapWhile<T, T2>;
+    skip: Skip<T>;
+    skipwhile: SkipWhile<T>;
+    step: StepBy<T>;
+    take: Take<T>;
+    takewhile: TakeWhile<T>;
+    peekable: Peekable<T>;
+    zip: Zip<T, T2>;
+}
+
+
+export const DoubleEndedIteratorAdapters = {
+    Chain,
+    Cycle,
+    FlatMap,
+    Flatten,
+    Filter,
+    Enumerate,
+    Map,
+    MapWhile,
+    Skip,
+    SkipWhile,
+    StepBy,
+    Take,
+    TakeWhile,
+    Peekable,
+    Zip,
 }
