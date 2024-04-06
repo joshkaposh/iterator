@@ -16,21 +16,21 @@
 | chain(other: Iterator<T>): Chain      | Takes two iterators and creates a new iterator over both in sequence.<br />`chain()` will first iterate over values from the first iterator and then over values from the second iterator.     |
 | collect(into?: new (iterable: Iterable<T>) => any): T[ ] \| Collection | By default, collects into an array. If a collection was passed, `collect()` will use that instead. <br /> One common way to use collect is to take a collection, call iter on it and do a bunch of data transformations, then collect back into a collection. |
 | count(): number      | By default, consumes an iterator, repeatedly calling `next()` until reaching the end. Some iterators may already know their count and may use that instead of consuming the iterator and calling `next()`.      |
-| cycle(): Cycle      | Converts a finite iterator into an infinite one. **Will block** if used in a forof loop or ... spread operator.     |
+| cycle(): Cycle      | Converts a finite iterator into an infinite one. **Will block** if used in a __forof__ loop or ... __spread__ operator.     |
 | enumerate(): Enumerate      | Creates an iterator yielding [index, element].|
 | eq(other: IterableIterator<T>): boolean      | Compares each element of this iterator and other using strict equality operator (===). Returns false if iterators are unequal length.     |
 | eq_by(other: IterableIterator<T>, cmp: (a: T, b: T) => boolean)      | Compares this iterator and other using the provided compare closure. |
 | filter(predicate: (value: T) => boolean)      | Creates an iterator which uses the provided closure to determine if an element should be yielded. The created iterator will only yield elements in which the closure returns true     |
 | find(predicate: (value: T) => boolean)      | Searches an iterator until the provided closure returns true. `find()` is short-curcuiting -  the iterator it was called on may still contain elements.     |
-| flat_map(fn: (value: A) => B): FlatMap | Creates an iterator that flattens and maps an iterator of nested iterators.<br />Ex. `[[1]], [2], [3]].flat_map(v => v * v).collect() == [1, 4, 9]`. <br /> See `flatten()` for more information.|
-| flatten(): Flatten  | Creates an iterator that flattens a nested structure. This is useful if you have an iterator of iterators and want to remove one level of indirection. |
-| fold<Acc>(initial: Acc, (acc: Acc, x: T) => Acc): Acc | Folds every element into an acculuator.<br /> Fold takes two arguments, 'initial', and a closure with two arguments, an 'accumulator' and an element. The return value of the closure will be used in the next iteration. If the iterator is empty, fold returns the initial value passed to it. |
+| flat_map(fn: (value: A) => B): FlatMap | Creates an iterator that flattens and maps an iterator of nested iterators.<br />Ex. [[1]], [2], [3]].flat_map(v => v * v).collect() == [1, 4, 9]. <br /> See [flatten](#flatten) for more information.|
+|<a id="flatten"></a>flatten(): Flatten  | Creates an iterator that flattens a nested structure. This is useful if you have an iterator of iterators and want to remove one level of indirection. |
+| <a id="fold"></a>fold<Acc>(initial: Acc, (acc: Acc, x: T) => Acc): Acc | Folds every element into an acculuator.<br /> Fold takes two arguments, 'initial', and a closure with two arguments, an 'accumulator' and an element. The return value of the closure will be used in the next iteration. If the iterator is empty, fold returns the initial value passed to it. |
 | for_each(fn: (value) => void): void  | Consumes an iterator, calling the provided closure for each element |
 | inspect(fn: (value) => void): Inspect | Creates an iterator that will call the provided closure for each element before passing it on. Inspect is useful for printing errors or debugging; in large data pipelines you may want to know the intermediate values between each method chain. |
-| intersperse(separator: T): Intersperse | Creates an iterator that places the provided separator between adjacent elements.<br />Ex. `[1, 2, 3].intersperse(100).collect() == [1, 100, 2, 100, 3]`. |
-| intersperse_with(separator: () => T): IntersperseWith  | Creates an iterator that places whatever is returned from the provided closure between adjacent elements.<br />Ex. `[1, 2, 3].intersperse_with(() => 100).collect() == [1, 100, 2, 100, 3]`. |
+| intersperse(separator: T): Intersperse | Creates an iterator that places the provided separator between adjacent elements.<br />Ex. [1, 2, 3].intersperse(100).collect() == [1, 100, 2, 100, 3]. |
+| intersperse_with(separator: () => T): IntersperseWith  | Creates an iterator that places whatever is returned from the provided closure between adjacent elements.<br />Ex. [1, 2, 3].intersperse_with(() => 100).collect() == [1, 100, 2, 100, 3]. |
 | last(): Option\<T> | By default `last()` will consume the iterator, repeatedly call `next()` until reaching the end of the iterator, then returning the last seen element. Smarter implementations may not need to consume the iterator. |
-| nth(): Option\<T> | Returns the Nth element of an iterator. If **N** is greater or equal to the iterator's length, `nth()` will return nothing. Note that calling nth(0) twice will **NOT** result in the same element.<br />Ex. `[1, 2, 3].nth(0) == 1`.  |
+| nth(): Option\<T> | Returns the Nth element of an iterator. If **N** is greater or equal to the iterator's length, `nth()` will return nothing. Note that calling nth(0) twice will **NOT** result in the same element.<br />Ex. [1, 2, 3].nth(0) == 1.  |
 | map(fn: (value: A) => B): Map | Creates an iterator where each element will be the returned value of the provided closure. |
 | map_while(fn: (value: A) => Option\<B>): MapWhile | Creates an iterator where each element will be the returned value of the provided closure. Iteration stops when the closure returns nothing. |
 | max(): Option\<T> | Returns the max element in an iterator. Will error or have unexpected behaviour if element is not a number or string. |
@@ -46,6 +46,6 @@
 | sum(): Option\<T> | Returns the sum of an iterator. Will error or have unexpected behaviour if element is not a number or string. |
 | take(n: number): Take | Creates an iterator yielding the first **N** elements, or fewer if the iterator ends early. |
 | take_while(predicate: (value: T) => boolean) | Creates an iterator that yields elements while the provided closure returns true. |
-| try_fold<Acc>(initial: Acc, fn: (acc: Acc, x: number) => Result<Acc, Err<Acc>>) | Similar to fold, except iteration stops when the closure returns an error. See fold for more documentation. |
+| try_fold<Acc>(initial: Acc, fn: (acc: Acc, x: number) => Result<Acc, Err<Acc>>) | Similar to fold, except iteration stops when the closure returns an error. See [fold](#fold) for more documentation. |
 | unzip(): [K[], V[]] | Converts an iterator of pairs into a pair of Arrays: the first array will contain the left elements, the second array containing the right elements. |
 | zip(other: Iterator<any>): Zip | 'Zips up' two iterators into an iterator of key/value pairs. Iteration ends when either iterator ends. To undo a 'zip', see unzip  |
