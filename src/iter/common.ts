@@ -1,6 +1,6 @@
 
 import { Iterator } from "./iterator";
-import { DoubleEndedIterator, ExactSizeDoubleEndedIterator } from './double-ended-iterator'
+import { ExactSizeDoubleEndedIterator } from './double-ended-iterator'
 import { type ArrayLikeType, type GeneratorType, type IterResult, NonZeroUsize, done, iter_item, non_zero_usize } from "./shared";
 import { type Result, is_some } from "../option";
 
