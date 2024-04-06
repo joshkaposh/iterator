@@ -9,7 +9,7 @@ import { Iter, IterInputType, is_arraylike } from "./shared";
 
 export function iter<It extends IterInputType<any>>(it?: It): Iter<It> {
     if (it instanceof Iterator) {
-        return it.into_iter() as Iter<It>;
+        return it as unknown as Iter<It>;
     } else if (is_arraylike(it)) {
         return new ArrayLike(it) as unknown as Iter<It>
     } else if (typeof it === 'function') {

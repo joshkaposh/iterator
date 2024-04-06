@@ -1,7 +1,7 @@
 import { iter } from ".";
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
 import { type MustReturn, TODO } from "../util";
-import { ErrorExt, FoldFn, Item, IterResult, NonZeroUsize, SizeHint, collect, done, from_fn, into_iter, iter_item, non_zero_usize, unzip } from "./shared";
+import { ErrorExt, FoldFn, Item, IterResult, IteratorInputType, NonZeroUsize, SizeHint, collect, done, from_fn, into_iter, iter_item, non_zero_usize, unzip } from "./shared";
 
 export interface Iterator<T> {
     // next(): Async extends false ? IterResult<T> : Promise<IterResult<T>>
@@ -37,6 +37,10 @@ export abstract class Iterator<T> {
             }
         }
         return true
+    }
+
+    array_chunks(n: number) {
+        return new ArrayChunks(this, n)
     }
 
     chain<O extends Iterator<any>>(other: O): Iterator<T | Item<O>> {
@@ -171,6 +175,15 @@ export abstract class Iterator<T> {
         return this.next();
     }
 
+    partition(predicate: (value: T) => boolean): [T[], T[]] {
+        const trues = [];
+        const falses = [];
+        for (const v of this) {
+            predicate(v) ? trues.push(v) : falses.push(v);
+        }
+        return [trues, falses];
+    }
+
     peekable(): Iterator<T> & { peek: () => IterResult<T>; } {
         return new Peekable(this)
     }
@@ -226,7 +239,7 @@ export abstract class Iterator<T> {
         return unzip(this as IterableIterator<[K, V]>)
     }
 
-    zip<V>(other: Iterator<V>): Iterator<[T, V]> {
+    zip<V>(other: IteratorInputType<V>): Iterator<[T, V]> {
         return new Zip(this, other)
     }
 
@@ -271,6 +284,41 @@ export class FusedIterator<T> extends Iterator<T> {
             return done()
         }
         return n;
+    }
+}
+
+class ArrayChunks<T> extends Iterator<T[]> {
+    #remainder: Option<T[]>
+    #n: number;
+    #iter: Iterator<T>;
+    constructor(iterable: Iterator<T>, n: number) {
+        super()
+        this.#iter = iterable
+        this.#n = n;
+    }
+
+    into_remainder() {
+        return this.#remainder;
+    }
+
+    override into_iter(): Iterator<T[]> {
+        this.#iter.into_iter();
+        return this;
+    }
+
+    override next(): IterResult<T[]> {
+        // ends iteration if reached end or cannot return 'n' elements
+        const chunk = this.#iter.next_chunk(this.#n);
+
+        if (chunk instanceof Error) {
+            if (this.#remainder) {
+                return done();
+            }
+            this.#remainder = chunk.get();
+            return done();
+        }
+
+        return iter_item(chunk)
     }
 }
 
@@ -1029,10 +1077,10 @@ class Zip<K, V> extends Iterator<[K, V]> {
     #iter: Iterator<K>;
     #other: Iterator<V>;
 
-    constructor(iterable: Iterator<K>, other: Iterator<V>) {
+    constructor(iterable: Iterator<K>, other: IteratorInputType<V>) {
         super()
         this.#iter = iterable;
-        this.#other = other;
+        this.#other = other as Iterator<V>;
     }
 
     override into_iter(): Iterator<[K, V]> {

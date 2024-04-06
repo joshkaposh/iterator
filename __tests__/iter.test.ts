@@ -5,6 +5,10 @@ function fill(len: number, from_zero = false) {
     return Array.from({ length: len }, (_, i) => from_zero ? i : i + 1)
 }
 
+function fill_with<T>(len: number, fn: (index: number) => T) {
+    return Array.from({ length: len }, (_, i) => fn(i))
+}
+
 function fill_string<T extends string>(string: T, len: number): `${T}-${number}`[] {
     const arr: `${T}-${number}`[] = []
     for (let i = 0; i < len; i++) {
@@ -117,6 +121,14 @@ test('IntoIter', () => {
     }
 })
 
+test('Partition', () => {
+    const arr = [1, 2, 3, 4];
+
+    expect(iter(arr).partition((v) => v % 2 === 0)).toEqual([[2, 4], [1, 3]])
+    expect(iter(arr).rev().partition((v) => v % 2 === 0)).toEqual([[4, 2], [3, 1]])
+
+})
+
 test('Flatten', () => {
     const none = [];
     const empty = [[], [], []];
@@ -128,18 +140,13 @@ test('Flatten', () => {
     const rev = structuredClone(expected).reverse()
 
     const long = Array.from({ length: 10 }, (_) => Array.from({ length: 10 }, (_, i) => i + 1))
-    const expected_long = [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10
-    ]
+
+    const expected_long = new Array(100);
+    for (let i = 0; i < 10; i++) {
+        for (let x = 0; x < 10; x++) {
+            expected_long[i * 10 + x] = x + 1
+        }
+    }
 
     assert(iter(none).count() === 0)
     assert(iter(empty).flatten().rev().count() === 0)
@@ -261,6 +268,17 @@ test('StepBy', () => {
     // }
 })
 
+test('Take', () => {
+    const first_100 = iter(fill(1000)).take(100);
+    const last_100 = iter(fill(1000)).rev().take(100);
+
+    expect(first_100.collect()).toEqual(fill(100))
+    expect(first_100.into_iter().rev().collect()).toEqual(fill(100).reverse())
+
+    expect(last_100.collect()).toEqual(fill_with(100, (i) => 900 + i + 1).reverse())
+
+})
+
 test('next_chunk', () => {
     const it = iter(fill(12));
     expect(it.next_chunk(5)).toEqual([1, 2, 3, 4, 5])
@@ -280,6 +298,18 @@ test('next_chunk', () => {
     const split = split_whitespace(str)
     expect(split).toEqual(['Hello', 'World', '!'])
 
+})
+
+test('ArrayChunks', () => {
+    const arr = fill(45);
+    const it = iter(arr).array_chunks(10);
+
+    expect(it.next().value).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(it.next().value).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+    expect(it.next().value).toEqual([21, 22, 23, 24, 25, 26, 27, 28, 29, 30])
+    expect(it.next().value).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40])
+    assert(it.next().done)
+    expect(it.into_remainder()).toEqual([41, 42, 43, 44, 45])
 })
 
 test('Intersperse', () => {
