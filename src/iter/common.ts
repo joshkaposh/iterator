@@ -54,6 +54,22 @@ export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
         return is_some(item) ? iter_item(item) : done();
     }
 
+    override eq(other: ArrayLike<T>): boolean {
+        if (this.len() !== other.len()) {
+            return false
+        }
+
+        return super.eq(other);
+    }
+
+    override eq_by(other: ArrayLike<T>, eq: (a: T, b: T) => boolean): boolean {
+        if (this.len() !== other.len()) {
+            return false
+        }
+
+        return super.eq_by(other, eq);
+    }
+
     override advance_by(n: number): Result<undefined, NonZeroUsize> {
         if (n === 0) {
             return;

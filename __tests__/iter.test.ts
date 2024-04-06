@@ -1,51 +1,9 @@
 import { assert, expect, test } from 'vitest'
 import { DoubleEndedIterator, iter, ErrorExt, Generator, Iterator } from "../src/iter";
+import { count, expect_error, fill, fill_string, fill_with, toInfinityAndBeyond } from './helpers';
 
-function expect_error(fn: () => any, message: string) {
-    try {
-        fn()
-    } catch (e) {
-        assert(e.message === message, `Expected Error message { ${message} } to equal { ${e.message} }`)
-    }
-}
 
-function fill(len: number, from_zero = false) {
-    return Array.from({ length: len }, (_, i) => from_zero ? i : i + 1)
-}
-
-function fill_with<T>(len: number, fn: (index: number) => T) {
-    return Array.from({ length: len }, (_, i) => fn(i))
-}
-
-function fill_string<T extends string>(string: T, len: number): `${T}-${number}`[] {
-    const arr: `${T}-${number}`[] = []
-    for (let i = 0; i < len; i++) {
-        arr.push(`${string}${i + 1}` as `${T}-${number}`);
-    }
-    return arr;
-}
-
-function* count(n: number, from_zero = false) {
-    let i = from_zero ? -1 : 0;
-    function lt(index: number) {
-        return !from_zero ? index < n : index < n - 1;
-    }
-
-    while (lt(i)) {
-        i++
-        yield i
-    }
-}
-
-function* toInfinityAndBeyond(from_zero = false) {
-    let x = from_zero ? -1 : 0;
-    while (true) {
-        x++;
-        yield x;
-    }
-}
-
-test('Fill functions', () => {
+test('fill functions', () => {
     expect(fill(5)).toEqual([1, 2, 3, 4, 5]);
     expect(fill(5, true)).toEqual([0, 1, 2, 3, 4]);
 
@@ -53,7 +11,19 @@ test('Fill functions', () => {
     expect([...count(5, true)]).toEqual([0, 1, 2, 3, 4])
 })
 
-test('IntoIter', () => {
+test('eq / eq_by', () => {
+
+    assert(!iter([1]).eq(iter([1, 2])))
+    assert(!iter([1, 2]).eq(iter([1])))
+    assert(iter(fill(50)).eq(iter(fill(50))));
+
+    assert(!iter([1, 2]).eq_by(iter([1, 4, 9]), (a, b) => a * a === b))
+    assert(!iter([1, 2, 3]).eq_by(iter([4, 9]), (a, b) => a * a === b))
+    assert(iter([1, 2, 3]).eq_by(iter([1, 4, 9]), (a, b) => a * a === b))
+
+})
+
+test('into_iter', () => {
     let g = iter(() => count(5));
     let a = iter(fill(5));
     expect(g.collect()).toEqual(g.into_iter().collect());
@@ -129,7 +99,7 @@ test('IntoIter', () => {
     }
 })
 
-test('Partition', () => {
+test('partition', () => {
     const arr = [1, 2, 3, 4];
 
     expect(iter(arr).partition((v) => v % 2 === 0)).toEqual([[2, 4], [1, 3]])
@@ -137,7 +107,7 @@ test('Partition', () => {
 
 })
 
-test("Misc Tests", () => {
+test("miscellaneous", () => {
     const a = iter(fill(3))
     const a2 = iter(fill(50)).skip(10);
 
@@ -180,7 +150,7 @@ test("Misc Tests", () => {
     ).toEqual([[0, 256], [1, 16]])
 })
 
-test('Flatten', () => {
+test('flatten', () => {
     const none = [];
     const empty = [[], [], []];
     const two_wide = [[1, 2], [3, 4], [5, 6]];
@@ -248,17 +218,38 @@ test('Flatten', () => {
 
 })
 
-test('Native Data Structures', () => {
-    const m = new Map<string, boolean>()
-    const s = new Set();
+test('native_data_structures', () => {
+    const m = new Map<string, boolean>([
+        ['himom', true],
+        ['hidad', false]
+    ])
+    const s = new Set([1, 2, 3, 4, 5]);
 
+    // TODO: iter should be able to use [Symbol.iterator] from Map / Set / etc
 
-    expect(iter(() => m.keys()) instanceof Generator).toBe(true);
-    expect(iter(() => m.values()) instanceof Generator).toBe(true)
-    expect(iter(() => m.entries()) instanceof Generator).toBe(true)
-    expect(iter(() => s.keys()) instanceof Generator).toBe(true);
-    expect(iter(() => s.values()) instanceof Generator).toBe(true);
-    expect(iter(() => s.entries()) instanceof Generator).toBe(true);
+    expect(iter(m).collect()).toEqual([['himom', true],
+    ['hidad', false]])
+
+    expect(iter(m.keys()).collect()).toEqual(['himom', 'hidad']);
+    expect(iter(m.values()).collect()).toEqual([true, false])
+    expect(iter(m.entries()).collect()).toEqual([
+        ['himom', true],
+        ['hidad', false]
+    ])
+
+    for (const k of s.keys()) {
+        assert(k === 1 || k === 2 || k === 3 || k === 4 || k === 5)
+    }
+
+    for (const v of s.values()) {
+        assert(v === 1 || v === 2 || v === 3 || v === 4 || v === 5)
+    }
+
+    for (const [a, b] of s.entries()) {
+        assert(a === 1 || a === 2 || a === 3 || a === 4 || a === 5)
+        assert(b === 1 || b === 2 || b === 3 || b === 4 || b === 5)
+    }
+
     expect(iter(function* () { }) instanceof Generator).toBe(true)
     expect(iter([]) instanceof DoubleEndedIterator).toBe(true)
     expect(iter(new Uint16Array()) instanceof DoubleEndedIterator).toBe(true);
@@ -267,7 +258,7 @@ test('Native Data Structures', () => {
     expect(collect_map.get('k')).toBe('v')
 })
 
-test('Free standing functions', () => {
+test('free_standing_functions', () => {
     const s = iter.successors(2, (v) => v < Math.pow(2, 5) ? v * v : null)
     expect(s.collect()).toEqual([2, 4, 16, 256])
     const once = iter.once(1)
@@ -278,7 +269,7 @@ test('Free standing functions', () => {
     expect(iter.once_with(() => 1).next().value).toBe(1);
 })
 
-test('MapWhile', () => {
+test('map_while', () => {
     const it = iter(toInfinityAndBeyond)
     const m = it.map_while((v) => {
         v = v * v;
@@ -287,7 +278,7 @@ test('MapWhile', () => {
     expect(m.last()).toBe(225);
 })
 
-test('StepBy', () => {
+test('step_by', () => {
     let step = iter(function* () {
         yield 0
         yield 1
@@ -319,7 +310,7 @@ test('StepBy', () => {
     // }
 })
 
-test('Take', () => {
+test('take', () => {
     const first_100 = iter(fill(1000)).take(100);
     const last_100 = iter(fill(1000)).rev().take(100);
 
@@ -351,7 +342,7 @@ test('next_chunk', () => {
 
 })
 
-test('ArrayChunks', () => {
+test('array_chunks', () => {
     const arr = fill(45);
     const it = iter(arr).array_chunks(10);
 
@@ -363,7 +354,7 @@ test('ArrayChunks', () => {
     expect(it.into_remainder()).toEqual([41, 42, 43, 44, 45])
 })
 
-test('Intersperse', () => {
+test('intersperse / intersperse_with', () => {
     const names = ['tony', 'josh', 'aysha']
     const all = iter(names)
         .intersperse(', ')
@@ -375,11 +366,11 @@ test('Intersperse', () => {
     expect(all2).toBe(all)
 })
 
-test('String iter', () => {
+test('string', () => {
     expect(iter('hello world').collect()).toEqual(['h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'])
 })
 
-test('Gen Works', () => {
+test('generator', () => {
     expect(
         iter(toInfinityAndBeyond)
             .map(v => v * 2)
@@ -417,7 +408,7 @@ test('Gen Works', () => {
 //     })
 // })
 
-test('Try fold', () => {
+test('try_fold', () => {
     let it = iter(fill(3))
     const sum = it.try_fold(0, (acc, inc) => {
         return inc === 2 ? new ErrorExt(inc, 'cannot be 2') : acc += inc
@@ -428,7 +419,7 @@ test('Try fold', () => {
     expect(it.next().value).toBe(3)
 })
 
-test('Find', () => {
+test('find', () => {
     let it = iter(fill(3));
     expect(it.find(v => v === 2)).toBe(2);
     expect(it.next().value).toBe(3);
@@ -443,7 +434,7 @@ test('Find', () => {
 
 })
 
-test('Peekable', () => {
+test('peekable', () => {
     let it = iter(fill(3)).peekable();
     expect(it.peek().value).toBe(1);
     expect(it.next().value).toBe(1);
@@ -459,7 +450,7 @@ test('Peekable', () => {
 
 })
 
-test('Iter len', () => {
+test('len', () => {
     let it = iter([1, 2, 3]);
     expect(it.len()).toBe(3);
     it.next()
@@ -482,13 +473,13 @@ test('Iter len', () => {
     expect(it.len()).toBe(0)
 })
 
-test('Advance by', () => {
+test('advance_by', () => {
     let it = iter(fill(3));
     expect(it.advance_by(0)).toBe(undefined);
     expect(it.next().value).toBe(1)
 })
 
-test('Iter nth', () => {
+test('nth', () => {
     let it = iter(fill(3));
     expect(it.nth(2).value).toEqual(3);
     it = iter(fill(3));
@@ -498,7 +489,7 @@ test('Iter nth', () => {
 
 })
 
-test('Iter rfold', () => {
+test('rfold', () => {
     expect(iter(fill(3)).rfold(0, (acc, inc) => {
         return acc - inc;
     })
@@ -514,7 +505,7 @@ test('Iter rfold', () => {
     ).toBe('backwards')
 })
 
-test('Iter rev', () => {
+test('rev', () => {
     expect(iter(fill(3))
         .rev()
         .collect()
@@ -571,7 +562,7 @@ test('Iter rev', () => {
 
 })
 
-test('Iter zip', () => {
+test('zip', () => {
     expect(
         iter(fill(3))
             .map(v => v * v)
@@ -603,28 +594,15 @@ test('Iter zip', () => {
     ).toEqual([2, [[81, 'v3'], 'k3']])
 })
 
-test('Throws', () => {
-    // @ts-expect-error
-    expect_error(() => iter(), 'Cannot construct an Iterator from primitive undefined')
+test('throws', () => {
+    expect_error(() => iter(undefined as any), "Cannot construct an Iterator from primitive 'undefined'")
+    expect_error(() => iter(null as any), "Cannot construct an Iterator from primitive 'null'")
+    expect_error(() => iter(0 as any), "Cannot construct an Iterator from primitive '0'")
+    expect_error(() => iter(true as any), "Cannot construct an Iterator from primitive 'true'")
+    expect_error(() => iter({} as any), "Iter cannot construct an Iterator from an object that is not Arraylike");
 })
 
-test('Iter', () => {
-    const double = iter(fill(3)).map(v => v * v).map(v => v * v);
-    const single = iter(() => count(3)).map(v => v * v).map(v => v * v);
-
-
-    const z = double.zip(iter(['v1', 'v2', 'v3']))
-    const other_g = iter(function* () {
-        yield 'v1';
-        yield 'v2';
-        yield 'v3';
-    });
-    const zg = single.zip(other_g);
-    expect(z.last()).toEqual([81, 'v3'])
-    expect(zg.last()).toEqual([81, 'v3'])
-})
-
-test('Iter spread', () => {
+test('spread operator', () => {
     const it = iter(fill(3))
     expect([...it]).toEqual([1, 2, 3]);
     expect([...it]).toEqual([]);
@@ -632,11 +610,5 @@ test('Iter spread', () => {
     const gen = iter(() => count(3))
     expect([...gen]).toEqual([1, 2, 3]);
     expect([...gen]).toEqual([]);
-    // expect([...gen.into_iter()]).toEqual([1, 2, 3])
+    expect([...gen.into_iter()]).toEqual([1, 2, 3])
 })
-
-// test('Iter Once', () => {
-//     expect(iter(fill(3)).sum()).toBe(6);
-//     expect(iter(fill(3)).min()).toBe(1);
-//     expect(iter(fill(3)).max()).toBe(3);
-// })

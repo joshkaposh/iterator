@@ -51,7 +51,6 @@ export type IteratorAdapter<T, T2 = any> = {
 }
 
 export interface Iterator<T> {
-    // next(): Async extends false ? IterResult<T> : Promise<IterResult<T>>
     advance_by(n: number): Result<Ok, NonZeroUsize>
 }
 export abstract class Iterator<T> {
@@ -116,14 +115,26 @@ export abstract class Iterator<T> {
         return new Enumerate(this)
     }
 
-    eq<It extends IterableIterator<any>>(other: It) {
+    eq(other: IterableIterator<T>) {
         for (const val of other) {
             const n = this.next()
             if (n.value !== val) {
                 return false
             }
         }
-        return true
+
+        return this.next().done === other.next().done
+    }
+
+    eq_by(other: IterableIterator<T>, eq: (a: T, b: T) => boolean): boolean {
+        for (const val of other) {
+            const n = this.next()
+            if (!eq(n.value, val)) {
+                return false
+            }
+        }
+
+        return this.next().done === other.next().done
     }
 
     filter(callback: (value: T) => boolean): Iterator<T> {

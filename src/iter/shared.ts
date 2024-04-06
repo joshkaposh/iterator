@@ -28,7 +28,7 @@ export type ArrayLikeType<T> = ArrayLike<T>
 export type GeneratorType<T> = Generator<T>
 
 export type DoubleEndedIteratorInputType<T = any> = ArrayLikeType<T> | DoubleEndedIterator<T>
-export type IteratorInputType<T = any> = (() => Generator<T>) | Iterator<T> | (() => IterableIterator<T>);
+export type IteratorInputType<T = any> = (() => Generator<T>) | (() => IterableIterator<T>) | Iterator<T> | Iterable<T>;
 export type IterInputType<T = any> = DoubleEndedIteratorInputType<T> | IteratorInputType<T>;
 
 export type IteratorType<T> = Generator<T> | Iterator<T> | ExactSizeIterator<T>;

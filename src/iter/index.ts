@@ -13,11 +13,15 @@ export function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
         return iterable as unknown as Iter<It>;
     } else if (is_arraylike(iterable)) {
         return new ArrayLike(iterable) as unknown as Iter<It>
+        // @ts-expect-error
+    } else if (iterable && iterable[Symbol.iterator]) {
+        // @ts-expect-error
+        return new Generator(() => iterable[Symbol.iterator]()) as unknown as Iter<It>
     } else if (typeof iterable === 'function') {
         return new Generator(iterable as any) as unknown as Iter<It>
     } else {
         const msg = is_primitive(iterable) ?
-            `Cannot construct an Iterator from primitive ${String(iterable)}` :
+            `Cannot construct an Iterator from primitive '${String(iterable)}'` :
             `Iter cannot construct an Iterator from an object that is not Arraylike`
         throw new Error(msg)
     }
