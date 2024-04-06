@@ -1,31 +1,31 @@
 import { iter } from ".";
-import { type Err, type Ok, type Option, type Result, is_error, is_some, None } from "../option";
-import { type MustReturn, TODO } from "../util";
+import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
+import { type MustReturn } from "../util";
 import { ErrorExt, FoldFn, Item, IterResult, IteratorInputType, NonZeroUsize, SizeHint, collect, done, from_fn, into_iter, iter_item, non_zero_usize, unzip } from "./shared";
 
 
-type IteratorRequiredMethods<It, T = Item<It>> = {
-    next(): IterResult<T>;
-    into_iter(): It;
-}
+// type IteratorRequiredMethods<It, T = Item<It>> = {
+//     next(): IterResult<T>;
+//     into_iter(): It;
+// }
 
-type IteratorOtherMethods<It, T = Item<It>> = {
-    advance_by(n: number): Result<Ok, NonZeroUsize>;
+// type IteratorOtherMethods<It, T = Item<It>> = {
+//     advance_by(n: number): Result<Ok, NonZeroUsize>;
 
-    any(predicate: (value: T) => boolean): boolean;
-    all(predicate: (value: T) => boolean): boolean;
+//     any(predicate: (value: T) => boolean): boolean;
+//     all(predicate: (value: T) => boolean): boolean;
 
-    count(): number;
+//     count(): number;
 
-    eq(other: It): boolean;
+//     eq(other: It): boolean;
 
-    find(predicate: (value: T) => boolean): Option<T>;
-    fold<Acc>(initial: Acc, f: (acc: Acc, x: T) => Acc): Acc;
-    for_each(fn: (value: T) => void): It;
+//     find(predicate: (value: T) => boolean): Option<T>;
+//     fold<Acc>(initial: Acc, f: (acc: Acc, x: T) => Acc): Acc;
+//     for_each(fn: (value: T) => void): It;
 
-    try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err>;
+//     try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err>;
 
-}
+// }
 
 export type IteratorAdapter<T, T2 = any> = {
     array_chunks(n: number): Iterator<T[]>;
@@ -33,6 +33,7 @@ export type IteratorAdapter<T, T2 = any> = {
     cycle(): Iterator<T>;
     enumerate(): Iterator<[number, T]>;
     flat_map(fn: (value: T) => T2): Iterator<T2>;
+    // @ts-expect-error
     flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): Iterator<T>;
     filter(predicate: (value: T) => boolean): Iterator<T>;
     fuse(): Iterator<T>;
@@ -141,6 +142,7 @@ export abstract class Iterator<T> {
         return new Filter(this, callback)
     }
 
+    // @ts-expect-error
     flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): Iterator<T> {
         return new Flatten(this as any)
     }
@@ -476,6 +478,7 @@ class Filter<T> extends Iterator<T> {
     }
 }
 
+// @ts-expect-error
 class FilterMap<A, B> extends Iterator<B> {
 
     #iter: Iterator<A>;
