@@ -42,12 +42,6 @@ export type Iter<It> =
     It extends ExactSizeIterator<T> ? ExactSizeIterator<T> : Iterator<T>
     : never;
 
-
-
-export function is_arraylike<T>(obj?: (string | object) & { length?: number }): obj is ArrayLike<T> {
-    return typeof obj !== 'function' && (typeof obj?.length === 'number' && obj.length >= 0)
-}
-
 export function done<TReturn>(): Done<TReturn> {
     return {
         done: true,

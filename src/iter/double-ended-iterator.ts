@@ -39,8 +39,8 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new Filter(this, callback)
     }
 
-    override flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): DoubleEndedIterator<O> {
-        return new Flatten(this as any);
+    override flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): DoubleEndedIterator<T> {
+        return new Flatten(this as any)
     }
 
     override flat_map<B>(f: (value: T) => B): Iterator<B> {
@@ -808,12 +808,12 @@ class Skip<T> extends ExactSizeDoubleEndedIterator<T> {
 class SkipWhile<T> extends DoubleEndedIterator<T> {
     #iter: DoubleEndedIterator<T>;
     #predicate: (value: T) => boolean
-    #found: boolean;
+    #needs_skip: boolean;
     constructor(iter: DoubleEndedIterator<T>, predicate: (value: T) => boolean) {
         super();
         this.#iter = iter;
         this.#predicate = predicate;
-        this.#found = false;
+        this.#needs_skip = true;
     }
 
     override into_iter(): DoubleEndedIterator<T> {
@@ -821,27 +821,34 @@ class SkipWhile<T> extends DoubleEndedIterator<T> {
         return this;
     }
 
+    // @ts-expect-error
     override next(): IterResult<T> {
-        if (!this.#found) {
-            while (!this.#found) {
-                const n = this.#iter.next();
-                if (n.done) {
-                    return n
-                } else if (this.#predicate(n.value)) {
-                    this.#found = true;
+        if (!this.#needs_skip) {
+            return this.#iter.next()
+        } else {
+            let n;
+            while (!(n = this.#iter.next()).done) {
+                if (this.#predicate(n.value)) {
                     return n;
                 }
             }
-        } else {
-            return this.#iter.next();
         }
-        //! not reachable
-        return done();
     }
 
+    // @ts-expect-error
     override next_back(): IterResult<T> {
-        return TODO();
+        if (!this.#needs_skip) {
+            return this.#iter.next_back()
+        } else {
+            let n;
+            while (!(n = this.#iter.next_back()).done) {
+                if (this.#predicate(n.value)) {
+                    return n;
+                }
+            }
+        }
     }
+
 }
 
 class StepBy<T> extends ExactSizeDoubleEndedIterator<T> {

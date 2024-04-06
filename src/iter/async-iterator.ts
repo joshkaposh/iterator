@@ -5,7 +5,6 @@ import { ErrorExt, IterResult, NonZeroUsize, done, iter_item } from "./shared";
 
 function knownsize(method: string) {
     return `AsyncIterator.${method} must be called on an Iterator with a known size`
-
 }
 
 export abstract class AsyncIterator<T> {
@@ -164,18 +163,13 @@ export abstract class AsyncIterator<T> {
     }
 }
 
-export interface ExactSizeAsyncIterator<T> {
+export interface AsyncExactSizeIterator<T> {
     size_hint(): [number, number];
 }
-export class ExactSizeAsyncIterator<T> extends AsyncIterator<T> {
-    #iter: AsyncIterator<T>
-    constructor(iter: AsyncIterator<T>) {
-        super()
-        this.#iter = iter;
-    }
+export abstract class AsyncExactSizeIterator<T> extends AsyncIterator<T> {
 
-    override async next(): Promise<IterResult<T>> {
-        return await this.#iter.next()
+    is_empty() {
+        return this.len() === 0;
     }
 
     len(): number {

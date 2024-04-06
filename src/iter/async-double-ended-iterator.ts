@@ -27,6 +27,20 @@ export abstract class AsyncDoubleEndedIterator<T> extends AsyncIterator<T> {
 
 }
 
+export interface AsyncExactSizeDoubleEndedIterator<T> {
+    size_hint(): [number, number];
+}
+
+export abstract class AsyncExactSizeDoubleEndedIterator<T> extends AsyncDoubleEndedIterator<T> {
+    is_empty() {
+        return this.len() === 0;
+    }
+
+    len(): number {
+        return this.size_hint()[1]
+    }
+}
+
 class Rev<T> extends AsyncDoubleEndedIterator<T> {
     #iter: AsyncDoubleEndedIterator<T>
     constructor(iter: AsyncDoubleEndedIterator<T>) {

@@ -1,6 +1,6 @@
 
 import { Iterator } from "./iterator";
-import { ExactSizeDoubleEndedIterator } from './double-ended-iterator'
+import { DoubleEndedIterator, ExactSizeDoubleEndedIterator } from './double-ended-iterator'
 import { type ArrayLikeType, type GeneratorType, type IterResult, NonZeroUsize, done, iter_item, non_zero_usize } from "./shared";
 import { type Result, is_some } from "../option";
 
@@ -97,44 +97,42 @@ export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
     }
 }
 
-export class Range {
+export class Range extends ExactSizeDoubleEndedIterator<number> {
     readonly start: number;
     readonly end: number;
     #index: number;
     #back_index: number;
 
     constructor(start: number, end: number) {
+        super();
         this.start = start;
         this.end = end;
         this.#index = start - 1;
         this.#back_index = end;
     }
 
+    override into_iter(): ExactSizeDoubleEndedIterator<number> {
+        this.#index = this.start - 1;
+        this.#back_index = this.end;
+        return this;
+    }
+
     next(): IterResult<number> {
         this.#index++;
-        if (this.#index >= this.end) {
+        if (this.#index >= this.#back_index) {
             return done()
         }
 
-        return {
-            done: false,
-            value: this.#index
-        }
+        return iter_item(this.#index)
     }
 
     next_back(): IterResult<number> {
         this.#back_index--;
-        if (this.#back_index <= this.start) {
+        if (this.#back_index <= this.#index) {
             return done()
         }
 
-        return {
-            done: false,
-            value: this.#back_index
-        }
-    }
-    [Symbol.iterator]() {
-        return this;
+        return iter_item(this.#back_index)
     }
 }
 

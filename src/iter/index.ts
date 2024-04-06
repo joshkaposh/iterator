@@ -1,21 +1,25 @@
 import { Option } from "../option";
-import { AsyncDoubleEndedIterator } from "./async-double-ended-iterator";
+import { is_arraylike, is_primitive } from "../util";
+import { AsyncDoubleEndedIterator, } from "./async-double-ended-iterator";
 import { AsyncIterator } from "./async-iterator";
 import { ArrayLike, Generator } from "./common";
 import { AsyncArraylike } from "./common-async";
-import { ExactSizeDoubleEndedIterator, once, once_with, repeat, repeat_with } from "./double-ended-iterator";
+import { ExactSizeDoubleEndedIterator, once, once_with, repeat, repeat_with, DoubleEndedIterator } from "./double-ended-iterator";
 import { Iterator, successors } from "./iterator";
-import { Iter, IterInputType, is_arraylike } from "./shared";
+import { Iter, IterInputType } from "./shared";
 
-export function iter<It extends IterInputType<any>>(it?: It): Iter<It> {
-    if (it instanceof Iterator) {
-        return it as unknown as Iter<It>;
-    } else if (is_arraylike(it)) {
-        return new ArrayLike(it) as unknown as Iter<It>
-    } else if (typeof it === 'function') {
-        return new Generator(it as any) as unknown as Iter<It>
+export function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
+    if (iterable instanceof Iterator) {
+        return iterable as unknown as Iter<It>;
+    } else if (is_arraylike(iterable)) {
+        return new ArrayLike(iterable) as unknown as Iter<It>
+    } else if (typeof iterable === 'function') {
+        return new Generator(iterable as any) as unknown as Iter<It>
     } else {
-        return undefined as unknown as Iter<It>
+        const msg = is_primitive(iterable) ?
+            `Cannot construct an Iterator from primitive ${String(iterable)}` :
+            `Iter cannot construct an Iterator from an object that is not Arraylike`
+        throw new Error(msg)
     }
 }
 
@@ -29,7 +33,7 @@ export function async_iter<It extends AsyncIterator<any> | AsyncDoubleEndedItera
 }
 
 iter.of = function <T>(...elements: T[]): ExactSizeDoubleEndedIterator<T> {
-    return new ArrayLike(elements)
+    return new ArrayLike(elements) as any
 }
 
 iter.once = once;
@@ -43,3 +47,11 @@ export * from './async-iterator';
 export * from './double-ended-iterator';
 export * from './common';
 export * from './shared';
+
+export {
+    Iterator,
+    // Exact
+    DoubleEndedIterator,
+    ExactSizeDoubleEndedIterator,
+
+}

@@ -39,6 +39,27 @@ export type Mut<T> = {
     -readonly [K in keyof T]: T[K]
 }
 
+export type Primitive = string | number | bigint | boolean | undefined | null | symbol;
+
+export function is_arraylike<T>(obj?: (string | object) & { length?: number }): obj is ArrayLike<T> {
+    return typeof obj !== 'function' && (typeof obj?.length === 'number' && obj.length >= 0)
+}
+
+export function is_primitive(value: unknown): value is Primitive {
+
+    const none = is_none(value)
+    if (none) {
+        return true
+    } else {
+        const ty = typeof value;
+        if (ty === 'number') {
+            return isNaN(value as number) || true
+        } else {
+            return ty === 'bigint' || ty === 'boolean' || ty === 'string' || ty === 'symbol'
+        }
+    }
+}
+
 export function TODO<T>(value?: unknown): T {
     return value as T;
 }

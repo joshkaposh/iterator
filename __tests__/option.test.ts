@@ -10,10 +10,6 @@ test('Result', () => {
     const r = result(() => { throw new Error })
     console.log(r.name);
 
-    // assert(result(() => { throw new Error }) === new ErrorExt(new Error()))
-    // assert(result(() => 2) === 2)
-
-
     type R = Result<number, ErrorExt>;
 
     type T2 = Expect<Equal<AsOption<R>, Option<number>>>

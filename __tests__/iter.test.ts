@@ -1,6 +1,14 @@
 import { assert, expect, test } from 'vitest'
 import { DoubleEndedIterator, iter, ErrorExt, Generator, Iterator } from "../src/iter";
 
+function expect_error(fn: () => any, message: string) {
+    try {
+        fn()
+    } catch (e) {
+        assert(e.message === message, `Expected Error message { ${message} } to equal { ${e.message} }`)
+    }
+}
+
 function fill(len: number, from_zero = false) {
     return Array.from({ length: len }, (_, i) => from_zero ? i : i + 1)
 }
@@ -135,7 +143,7 @@ test("Misc Tests", () => {
 
     expect(a2.next_back().value).toBe(50)
 
-    const b = iter(count(50)).skip(10);
+    const b = iter(() => count(50)).skip(10);
 
     let s = iter(fill(3))
     expect(s.sum()).toBe(6)
@@ -595,6 +603,11 @@ test('Iter zip', () => {
     ).toEqual([2, [[81, 'v3'], 'k3']])
 })
 
+test('Throws', () => {
+    // @ts-expect-error
+    expect_error(() => iter(), 'Cannot construct an Iterator from primitive undefined')
+})
+
 test('Iter', () => {
     const double = iter(fill(3)).map(v => v * v).map(v => v * v);
     const single = iter(() => count(3)).map(v => v * v).map(v => v * v);
@@ -607,7 +620,6 @@ test('Iter', () => {
         yield 'v3';
     });
     const zg = single.zip(other_g);
-    expect(iter()).toBe(undefined)
     expect(z.last()).toEqual([81, 'v3'])
     expect(zg.last()).toEqual([81, 'v3'])
 })
