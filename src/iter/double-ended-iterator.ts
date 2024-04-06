@@ -1,7 +1,7 @@
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
 import { type Item, type IterResult, type SizeHint, type FoldFn, ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize, from_fn, into_iter, DoubleEndedIteratorInputType, IteratorInputType } from "./shared";
 import { Iterator } from './iterator'
-import { TODO, assert } from "../util";
+import { assert } from "../util";
 import { iter } from ".";
 
 export interface DoubleEndedIterator<T> {
@@ -39,6 +39,7 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new Filter(this, callback)
     }
 
+    // @ts-expect-error
     override flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): DoubleEndedIterator<T> {
         return new Flatten(this as any)
     }
