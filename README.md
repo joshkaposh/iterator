@@ -44,8 +44,8 @@
 | skip_while(predicate: (value: T) => boolean): SkipWhile | Creates an iterator that skips elements until the provided closure returns true. |
 | step_by(n: number): StepBy | Creates an iterator starting at the same point, but stepping by the provided amount each iteration. |
 | sum(): Option\<T> | Returns the sum of an iterator. Will error or have unexpected behaviour if element is not a number or string. |
-| take(n: number): Take | Creates an iterator yielding the first **N** elements, or fewer if the iterator ends early |
-| take_while(predicate: (value: T) => boolean) | Creates an iterator that yields elements while the provided closure returns true |
+| take(n: number): Take | Creates an iterator yielding the first **N** elements, or fewer if the iterator ends early. |
+| take_while(predicate: (value: T) => boolean) | Creates an iterator that yields elements while the provided closure returns true. |
 | try_fold<Acc>(initial: Acc, fn: (acc: Acc, x: number) => Result<Acc, Err<Acc>>) | Similar to fold, except iteration stops when the closure returns an error. See fold for more documentation. |
 | unzip(): [K[], V[]] | Converts an iterator of pairs into a pair of Arrays: the first array will contain the left elements, the second array containing the right elements. |
 | zip(other: Iterator<any>): Zip | 'Zips up' two iterators into an iterator of key/value pairs. Iteration ends when either iterator ends.  |
