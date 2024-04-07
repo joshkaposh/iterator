@@ -7,8 +7,6 @@
             "ESNext",
             "DOM"
         ],
-        "jsx": "preserve",
-        "jsxImportSource": "solid-js",
         "moduleResolution": "Node",
         "strict": true,
         "resolveJsonModule": true,
@@ -19,7 +17,8 @@
         "noUnusedParameters": true,
         "noImplicitReturns": true,
         "skipLibCheck": true,
-        "noImplicitOverride": true
+        "noImplicitOverride": true,
+        "outDir": "dist"
     },
     "include": [
         "src",

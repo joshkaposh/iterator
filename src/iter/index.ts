@@ -1,12 +1,12 @@
-import { Option } from "../option";
+import { type Option } from "../option";
 import { is_arraylike, is_primitive } from "../util";
 import { AsyncDoubleEndedIterator, } from "./async-double-ended-iterator";
 import { AsyncIterator } from "./async-iterator";
 import { ArrayLike, Generator } from "./common";
 import { AsyncArraylike } from "./common-async";
 import { ExactSizeDoubleEndedIterator, once, once_with, repeat, repeat_with, DoubleEndedIterator } from "./double-ended-iterator";
-import { Iterator, successors } from "./iterator";
-import { Iter, IterInputType } from "./shared";
+import { Iterator, ExactSizeIterator, successors } from "./iterator";
+import { Iter, IterInputType, ErrorExt, NonZeroUsize } from "./shared";
 
 export function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
     if (iterable instanceof Iterator) {
@@ -50,12 +50,28 @@ export * from './iterator'
 export * from './async-iterator';
 export * from './double-ended-iterator';
 export * from './common';
-export * from './shared';
+
+export type {
+    Iter,
+    IterInputType
+}
 
 export {
     Iterator,
-    // Exact
+    ExactSizeIterator,
+
     DoubleEndedIterator,
     ExactSizeDoubleEndedIterator,
 
+    ErrorExt,
+    NonZeroUsize,
+
+    once,
+    once_with,
+    repeat,
+    repeat_with,
+    successors,
+
+    is_arraylike,
+    is_primitive,
 }

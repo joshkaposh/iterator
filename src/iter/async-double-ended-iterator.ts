@@ -19,6 +19,7 @@ export abstract class AsyncDoubleEndedIterator<T> extends AsyncIterator<T> {
         return;
     }
 
+    // @ts-expect-error
     rfold<Acc>(initial: Acc, fold: (acc: Acc, x: T) => Acc) { }
 
     override flatten<F extends T extends Iterable<infer Item> ? Item : never>(): AsyncDoubleEndedIterator<F> {

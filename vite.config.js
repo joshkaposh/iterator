@@ -1,14 +1,14 @@
 import { defineConfig } from "vite";
+import { resolve } from 'path'
 
 export default defineConfig({
     plugins: [],
-    // test: {
-    //     environment: 'jsdom'
-    // },
-    // optimizeDeps: false,
-    // build: {
-    //     commonjsOptions: {
-    //         include: []
-    //     }
-    // }
+    build: {
+        lib: {
+            entry: resolve(__dirname, 'src/index.ts'),
+            name: 'JoshkaposhIterator',
+            // the proper extensions will be added
+            fileName: 'joshkaposh-iterator',
+          },
+    }
 })
