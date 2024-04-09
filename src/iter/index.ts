@@ -4,8 +4,8 @@ import { AsyncDoubleEndedIterator, } from "./async-double-ended-iterator";
 import { AsyncIterator } from "./async-iterator";
 import { ArrayLike, Generator } from "./common";
 import { AsyncArraylike } from "./common-async";
-import { ExactSizeDoubleEndedIterator, once, once_with, repeat, repeat_with, DoubleEndedIterator } from "./double-ended-iterator";
-import { Iterator, ExactSizeIterator, successors } from "./iterator";
+import { ExactSizeDoubleEndedIterator, DoubleEndedIterator, Once, OnceWith, Repeat, RepeatWith } from "./double-ended-iterator";
+import { Iterator, ExactSizeIterator, Successors } from "./iterator";
 import { Iter, IterInputType, ErrorExt, NonZeroUsize } from "./shared";
 
 export function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
@@ -36,15 +36,11 @@ export function async_iter<It extends AsyncIterator<any> | AsyncDoubleEndedItera
     return undefined as any
 }
 
-iter.of = function <T>(...elements: T[]): ExactSizeDoubleEndedIterator<T> {
-    return new ArrayLike(elements) as any
-}
-
-iter.once = once;
-iter.once_with = once_with;
-iter.successors = successors;
-iter.repeat = repeat;
-iter.repeat_with = repeat_with;
+iter.once = <T>(value: T) => new Once(value)
+iter.once_with = <T>(once: () => T) => new OnceWith(once)
+iter.successors = <T>(first: T, succ: (value: T) => Option<T>) => new Successors(first, succ)
+iter.repeat = <T>(value: T) => new Repeat(value);
+iter.repeat_with = <T>(gen: () => T) => new RepeatWith(gen);
 
 export * from './iterator'
 export * from './async-iterator';
@@ -65,12 +61,6 @@ export {
 
     ErrorExt,
     NonZeroUsize,
-
-    once,
-    once_with,
-    repeat,
-    repeat_with,
-    successors,
 
     is_arraylike,
     is_primitive,

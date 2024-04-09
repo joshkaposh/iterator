@@ -1,33 +1,16 @@
 import { ExactSizeIterator, Iterator } from './iterator'
 import type { Result, Ok, Err, AsOption, Option } from "../option";
 import { is_error, is_some } from '../option';
-import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, iter } from '.';
+import { DoubleEndedIterator, ExactSizeDoubleEndedIterator } from '.';
 
-export type FoldFn<T, B, R = B> = (acc: B, x: T) => R
-export type CollectFn<T, It extends Iterable<T>> = <Into extends (iter: It) => any | undefined>(into?: Into) => HasArgument<typeof into, Into> extends 1 ? Into extends (...args: any) => infer R ? R : never : T[]
+export type Item<It> = It extends Iterable<infer T> ? T : never;
 
-export type Item<It> =
-    It extends Iterable<infer T> ? T :
-    It extends Iterator<infer T> ? T :
-    never;
-
-export type Done<TReturn = undefined> = Required<IteratorReturnResult<TReturn>>;
-export type Next<T> = Required<IteratorYieldResult<T>>;
-export type IterResult<T> = Next<T> | Done<T>;
 export type SizeHint<Lo = number, Hi = Option<number>> = [Lo, Hi]
-
-export type IntoCollection<It extends IterInputType<any>> = (
-    (new (...args: any[]) => any) & { from(iter: It): any }
-)
-
-export type Collection<Coll extends IntoCollection<IterInputType<any>>> = Coll extends (new (...args: any[]) => any) & { from(iter: Iterable<any>): infer C } ? C : never;
-
-export type HasArgument<Argument, ParamType> = ParamType extends NonNullable<Argument> ? 1 : 0
 
 export type ArrayLikeType<T> = ArrayLike<T>
 export type GeneratorType<T> = Generator<T>
 
-export type DoubleEndedIteratorInputType<T = any> = ArrayLikeType<T> | DoubleEndedIterator<T>
+export type DoubleEndedIteratorInputType<T = any> = ArrayLike<T> | DoubleEndedIterator<T>
 export type IteratorInputType<T = any> = (() => Generator<T>) | (() => IterableIterator<T>) | Iterator<T> | Iterable<T>;
 export type IterInputType<T = any> = DoubleEndedIteratorInputType<T> | IteratorInputType<T>;
 
@@ -42,14 +25,14 @@ export type Iter<It> =
     It extends ExactSizeIterator<T> ? ExactSizeIterator<T> : Iterator<T>
     : never;
 
-export function done<TReturn>(): Done<TReturn> {
+export function done<TReturn>(): IteratorResult<TReturn> {
     return {
         done: true,
         value: undefined as TReturn
     }
 }
 
-export function iter_item<T>(value: T): Next<T> {
+export function iter_item<T>(value: T): IteratorYieldResult<T> {
     return {
         done: false,
         value: value
@@ -67,21 +50,10 @@ class FromFn<T> extends Iterator<T> {
         return this
     }
 
-    override next(): IterResult<T> {
+    override next(): IteratorResult<T> {
         const n = this.#fn();
         return is_some(n) ? iter_item(n) : done();
     }
-}
-
-export function into_iter<It extends Iterator<any> | DoubleEndedIterator<any>>(this_iter: It, inner: (Iterator<any> | DoubleEndedIterator<any> | ExactSizeIterator<any> | ExactSizeDoubleEndedIterator<any>)[]) {
-    for (const it of inner) {
-        if ('into_iter' in it) {
-            it.into_iter();
-        } else {
-            console.error('into_iter was not found on %O', it)
-        }
-    }
-    return this_iter;
 }
 
 export function from_fn<T>(f: () => Option<T>): FromFn<T> {
@@ -90,23 +62,12 @@ export function from_fn<T>(f: () => Option<T>): FromFn<T> {
 
 export function collect<T>(iter: IterInputType<T>, into?: undefined): T[];
 export function collect<T, I extends (new (it: Iterable<T>) => any)>(iter: IterInputType<T>, into: I): InstanceType<I>
-export function collect<It extends IterInputType<any>, Into extends IntoCollection<It>>(it: It, into?: Into): Collection<Into> | Item<It>[] {
+export function collect<It extends Iterable<any>, Collection extends new (it: Iterable<Item<It>>) => any>(it: It, into?: Collection): InstanceType<Collection> | Item<It>[] {
     if (into) {
         return new into(it)
     }
 
-    return Array.from(iter(it))
-}
-
-export function unzip<K, V>(iter: IterableIterator<[K, V]>): [K[], V[]] {
-    let keys = [];
-    let values = [];
-    for (const [key, value] of iter) {
-        keys.push(key)
-        values.push(value)
-    }
-
-    return [keys, values]
+    return Array.from(it as any) as any
 }
 
 export class ErrorExt<T = any> extends Error implements Err {

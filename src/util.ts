@@ -41,10 +41,6 @@ export type Mut<T> = {
 
 export type Primitive = string | number | bigint | boolean | undefined | null | symbol;
 
-export function is_arraylike<T>(obj?: (string | object) & { length?: number }): obj is ArrayLike<T> {
-    return typeof obj !== 'function' && (typeof obj?.length === 'number' && obj.length >= 0)
-}
-
 export function is_primitive(value: unknown): value is Primitive {
 
     const none = is_none(value)
@@ -60,15 +56,48 @@ export function is_primitive(value: unknown): value is Primitive {
     }
 }
 
-export function TODO<T>(value?: unknown): T {
-    return value as T;
+export function is_arraylike<T>(obj?: (string | object) & { length?: number }): obj is ArrayLike<T> {
+    return typeof obj !== 'function' && (typeof obj?.length === 'number' && obj.length >= 0)
 }
 
+export function unused(...args: any[]) { return args }
+
+export function TODO<T>(msg?: string, ...unused_vars: any[]): T {
+    unused(unused_vars)
+    throw new Error(`Not implemented: ${msg}`)
+}
+
+// TODO - move these into ecs
 export function split_first<T>(array: T[]): Option<[T, T[]]> {
     if (array.length > 0) {
         return [array[0], array.slice(1, array.length)]
     }
     return;
+}
+
+/**
+ * @typedef {*} Option
+ */
+
+/**
+* @param {number} index - The index to split at. Index is inclusive
+* @returns {*} Option<[T[], T[]]>
+* @description 
+* Splits an array into two sub-arrays at the supplied index.
+* The first array, if returned, will include up to N elements, where N == index
+* @example
+* const [a, b] = split_at([1, 2, 3, 4], 1)
+* assert(a == [1, 2])
+* assert(a == [3, 4])
+* assert(split_at([], 0) == undefined)
+*/
+export function split_at<T>(array: T[], index: number): Option<[T[], T[]]> {
+    index++;
+    if (array.length > 0) {
+        return [array.slice(0, index), array.slice(index, array.length)]
+    }
+
+    return
 }
 
 export function resize<T>(array: T[], new_len: number, value: T) {

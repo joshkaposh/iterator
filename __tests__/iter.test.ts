@@ -1,14 +1,37 @@
 import { assert, expect, test } from 'vitest'
 import { DoubleEndedIterator, iter, ErrorExt, Generator, Iterator } from "../src/iter";
 import { count, expect_error, fill, fill_string, fill_with, toInfinityAndBeyond } from './helpers';
+import { IteratorInputType, from_fn } from '../src/iter/shared';
 
+test('valid iter arguments', () => {
+    iter_test([1], [1])
+    iter_test(function* () { yield 1 }, [1])
+    iter_test(new Map([['k', 'v']]), [['k', 'v']])
+    iter_test(new Map([['k', 'v']]).keys(), ['k'])
+    iter_test(new Set([1]), [1]);
+    expect(iter_args(1, 2, 3, 4, 5).collect()).toEqual([1, 2, 3, 4, 5])
 
-test('fill functions', () => {
-    expect(fill(5)).toEqual([1, 2, 3, 4, 5]);
-    expect(fill(5, true)).toEqual([0, 1, 2, 3, 4]);
+    function iter_args(...args: any[]): Iterator<any>;
+    function iter_args() {
+        return iter(arguments)
+    }
 
-    expect([...count(5)]).toEqual([1, 2, 3, 4, 5]);
-    expect([...count(5, true)]).toEqual([0, 1, 2, 3, 4])
+    function iter_test(it: IteratorInputType, expected: any[]) {
+        expect(iter(it).collect()).toEqual(expected)
+    }
+})
+
+test('from_fn', () => {
+    expect(from_fn(() => null).collect()).toEqual([]);
+    expect(from_fn(from(5)).collect()).toEqual([1, 2, 3, 4, 5]);
+
+    function from(len: number) {
+        let next = 0;
+        return () => {
+            next++;
+            return next > len ? null : next
+        };
+    }
 })
 
 test('eq / eq_by', () => {
@@ -263,10 +286,16 @@ test('free_standing_functions', () => {
     expect(s.collect()).toEqual([2, 4, 16, 256])
     const once = iter.once(1)
     assert(once.next().value === 1)
-    expect(once.next().value === undefined)
+    assert(once.next().value === undefined)
+    assert(once.into_iter().next().value === 1)
+
     expect(iter.repeat(69).take(5).collect()).toEqual([69, 69, 69, 69, 69])
 
-    expect(iter.once_with(() => 1).next().value).toBe(1);
+    const once_with = iter.once_with(() => 1);
+
+    assert(once_with.next().value === 1)
+    assert(once_with.next().value === undefined)
+    assert(once_with.into_iter().next().value === 1)
 })
 
 test('map_while', () => {
@@ -292,9 +321,6 @@ test('step_by', () => {
     expect(step.next().value).toBe(2)
     expect(step.next().value).toBe(4)
     expect(step.next().value).toBe(undefined)
-
-    console.log(step.count());
-    console.log(step.into_iter().count(), step.into_iter().collect());
 
     const step_double = iter([0, 1, 2, 3, 4, 5]).step_by(2)
 
@@ -326,7 +352,7 @@ test('next_chunk', () => {
     expect(it.next_chunk(5)).toEqual([1, 2, 3, 4, 5])
     expect(it.next_chunk(5)).toEqual([6, 7, 8, 9, 10])
     expect(it.next_chunk(5)).toEqual(new ErrorExt([11, 12], `'next_chunk' couldn't fill a container of 5 elements, but a container of 2 elements were found`))
-    expect(iter.of(1, 2).next_chunk(3)).toEqual(new ErrorExt([1, 2], `'next_chunk' couldn't fill a container of 3 elements, but a container of 2 elements were found`))
+    expect(iter([1, 2]).next_chunk(3)).toEqual(new ErrorExt([1, 2], `'next_chunk' couldn't fill a container of 3 elements, but a container of 2 elements were found`))
 
     function split_whitespace(str: string) {
         return str.split(' ').filter(v => v !== '');
@@ -495,11 +521,11 @@ test('rfold', () => {
     })
     ).toBe(-6)
 
-    expect(iter.of('b', 'a', 'c', 'k', 'w', 'a', 'r', 'd', 's')
+    expect(iter(['b', 'a', 'c', 'k', 'w', 'a', 'r', 'd', 's'])
         .rfold('', (acc, inc) => acc += inc)
 
     ).toBe('sdrawkcab')
-    expect(iter.of('b', 'a', 'c', 'k', 'w', 'a', 'r', 'd', 's').rev().rfold('', (acc, inc) => {
+    expect(iter(['b', 'a', 'c', 'k', 'w', 'a', 'r', 'd', 's']).rev().rfold('', (acc, inc) => {
         return acc += inc;
     })
     ).toBe('backwards')
@@ -594,7 +620,7 @@ test('zip', () => {
     ).toEqual([2, [[81, 'v3'], 'k3']])
 })
 
-test('throws', () => {
+test('iter invalid argument', () => {
     expect_error(() => iter(undefined as any), "Cannot construct an Iterator from primitive 'undefined'")
     expect_error(() => iter(null as any), "Cannot construct an Iterator from primitive 'null'")
     expect_error(() => iter(0 as any), "Cannot construct an Iterator from primitive '0'")
@@ -611,4 +637,15 @@ test('spread operator', () => {
     expect([...gen]).toEqual([1, 2, 3]);
     expect([...gen]).toEqual([]);
     expect([...gen.into_iter()]).toEqual([1, 2, 3])
+})
+
+test('once', () => {
+    // const o = iter.once(0);
+
+    // const chain = o.chain([1, 2, 3, 4]);
+
+    // expect(chain.collect()).toEqual([0, 1, 2, 3, 4])
+    // expect(chain.collect()).toEqual([])
+    // expect(chain.into_iter().collect()).toEqual([0, 1, 2, 3, 4])
+
 })
