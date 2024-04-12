@@ -1,7 +1,7 @@
 import { assert, test } from "vitest"
 import { AsOption, Option, Result, ok, result } from "../src/option"
 import { Expect, Equal } from '../src/util'
-import { ErrorExt } from "../src/iter";
+import { ErrorExt } from "../src/iter/shared"
 
 test('Result', () => {
     assert(ok(2) === 2);

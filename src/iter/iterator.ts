@@ -1,6 +1,7 @@
 import { iter } from ".";
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
-import { collect, ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize, type IteratorInputType, type MustReturn, type Item, type SizeHint } from "./shared";
+import { done, iter_item, type MustReturn, type Item, type SizeHint, type GeneratorType, NonZeroUsize, ErrorExt, non_zero_usize } from "./shared";
+import type { IteratorInputType } from './types';
 
 export interface Iterator<T> {
     advance_by(n: number): Result<Ok, NonZeroUsize>
@@ -48,7 +49,11 @@ export abstract class Iterator<T> {
     collect(into?: undefined): T[];
     collect<I extends new (it: Iterable<T>) => any>(into: I): InstanceType<I>
     collect<I extends new (it: Iterable<T>) => any>(into?: I): InstanceType<I> | T[] {
-        return collect(this, into as any)
+        if (into) {
+            return new into(this)
+        }
+
+        return Array.from(this)
     }
 
     count() {
@@ -97,15 +102,29 @@ export abstract class Iterator<T> {
         return new FilterMap(this, callback)
     }
 
-    // @ts-expect-error
-    flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): Iterator<T> {
-        return new Flatten(this as any)
+    flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): Iterator<O> {
+        return new Flatten(this as unknown as Iterator<Iterator<O>>)
     }
 
+    /**
+     * @description
+     * Flattens and then maps values A -> B.
+     * 
+     * flat_map() is a shorthand for Iterator.flatten().map()
+     * 
+     * See Iterator.flatten() and Iterator.map() for more information.
+     */
     flat_map<B>(f: MustReturn<(value: T) => B>): Iterator<B> {
         return new FlatMap(this as any, f)
     }
 
+    /**
+     * @summary 
+     * find() searches the Iterator until an element is found given the supplied predicate.
+     * 
+     * find() is short-curcuiting - the Iterator may have more elements left.
+     * @returns element T or None if T wasn't found.
+     */
     find(predicate: (value: T) => boolean): Option<T> {
         let n;
         while (!(n = this.next()).done) {
@@ -116,6 +135,13 @@ export abstract class Iterator<T> {
         return null;
     }
 
+    /**
+     * @description
+     * fold() takes two arguments, an initial B and a folder (acc: B, element: T) => B.
+     * 
+     * fold() will take an Iterator and reduce it down to a single value.
+     * Each iteration fold() will call the folder(), with folder()'s return value being the next value the folder() receives on the next iteration.
+     */
     fold<B>(initial: B, fold: (acc: B, x: T) => B) {
         let acc = initial;
         let next;
@@ -126,6 +152,12 @@ export abstract class Iterator<T> {
         return acc;
     }
 
+    /**
+     * @description
+     * for_each() will consume the Iterator, passing each element it encounters to the provided callback.
+     * 
+     * for_each() is useful if you want to do something with the elements of an Iterator but dont want to collect() into a Collection
+    */
     for_each(callback: (value: T) => void) {
         for (const item of this.into_iter()) {
             callback(item);
@@ -133,10 +165,39 @@ export abstract class Iterator<T> {
         return this;
     }
 
+    /**
+     * @description
+     * Fuses an Iterator.
+     * 
+     * Some Iterators may yield an element T after finishing. A FusedIterator will stop afted the first time it encounters an IteratorResult<T> where IteratorResult = { done: true, value: undefined }
+    */
     fuse(): Iterator<T> {
         return new FusedIterator(this);
     }
 
+    /**
+     * @summary
+     * Inspects an iterator, calling the supplied callback each iteration before forwarding the element.
+     * @description
+
+     * inpect() is often used for debugging complex data pipelines, or for printing errors.
+     * It can be used to log messages before each call site in a pipeline.
+     * @example
+     * iter([2, 4])
+     * .inspect((v) => console.log('About to filter %d', v))
+     * .filter()
+     * .inspect((v) => console.log('About to map %d', v))
+     * .map()
+     * .inspect((v) => console.log('About to collect %d', v))
+     * .collect()
+     * 
+    // 'About to filter 2'
+    // 'About to map 2'
+    // 'About to collect 4'
+    // 'About to filter 4'
+    // 'About to map 4'
+    // 'About to collect 16'
+    */
     inspect(callback: (value: T) => void): Iterator<T> {
         return new Inspect(this, callback)
     }
@@ -181,13 +242,34 @@ export abstract class Iterator<T> {
         return new MapWhile(this, f)
     }
 
+
     //! Caller must ensure T = number
-    max(): number {
-        return Math.max(...this as Iterable<number>)
+    max<M extends T extends string | number ? T : never>(): Option<M> {
+        const n = this.next();
+        if (n.done) {
+            return
+        } else {
+            if (typeof n.value === 'number') {
+                return Math.max(n.value, ...this as any) as M;
+            } else {
+                // @ts-expect-error
+                return this.fold(n.value, (acc, x) => (acc > x ? acc : x))
+            }
+        }
     }
     //! Caller must ensure T = number
-    min(): number {
-        return Math.min(...this as Iterable<number>)
+    min<M extends T extends string | number ? T : never>(): Option<M> {
+        const n = this.next();
+        if (n.done) {
+            return
+        } else {
+            if (typeof n.value === 'number') {
+                return Math.min(n.value, ...this as any) as M;
+            } else {
+                // @ts-expect-error
+                return this.fold(n.value, (acc, x) => (acc > x ? acc : x))
+            }
+        }
     }
 
     next_chunk(n: number): Result<T[], Err<T[]>> {
@@ -333,27 +415,6 @@ export class FusedIterator<T> extends Iterator<T> {
         }
         return n;
     }
-}
-
-class FromFn<T> extends Iterator<T> {
-    #fn: () => Option<T>;
-    constructor(fn: () => Option<T>) {
-        super()
-        this.#fn = fn;
-    }
-
-    override into_iter(): Iterator<T> {
-        return this
-    }
-
-    override next(): IteratorResult<T> {
-        const n = this.#fn();
-        return is_some(n) ? iter_item(n) : done();
-    }
-}
-
-export function from_fn<T>(f: () => Option<T>): FromFn<T> {
-    return new FromFn(f)
 }
 
 class ArrayChunks<T> extends Iterator<T[]> {
@@ -1230,8 +1291,69 @@ class Zip<K, V> extends Iterator<[K, V]> {
         return (k.done || v.done) ? done() : iter_item([k.value, v.value] as [K, V])
     }
 }
+
+// * --- common Iterators ---
+
+// accepts any () => { next(): IteratorResult<T> }
+export class Generator<T> extends Iterator<T> {
+    #into_iter: () => GeneratorType<T>;
+    #iter: GeneratorType<T>;
+    constructor(into_iter: () => GeneratorType<T>) {
+        super();
+        this.#into_iter = into_iter;
+        this.#iter = into_iter();
+    }
+
+    override next(): IteratorResult<T> {
+        return this.#iter.next()
+    }
+
+    override into_iter(): Generator<T> {
+        this.#iter = this.#into_iter();
+        return this
+    }
+}
+
 //* --- free standing functions ---
-export class Successors<T> extends Iterator<T> {
+
+class FromFn<T> extends Iterator<T> {
+    #fn: () => Option<T>;
+    constructor(fn: () => Option<T>) {
+        super()
+        this.#fn = fn;
+    }
+
+    override into_iter(): Iterator<T> {
+        return this
+    }
+
+    override next(): IteratorResult<T> {
+        const n = this.#fn();
+        return is_some(n) ? iter_item(n) : done();
+    }
+}
+
+// accepts any callback () => Option<T>.
+// Iteration ends when callback return None
+/**
+ * 
+ * @summary 
+ * Creates an Iterator that will call the supplied callback on each iteration.
+ * Iteration ends when when the callback returns None
+ * @example
+ * let count = 0;
+ * from_fn(() => {
+        count++;
+        return count > 5 ? null : count;
+    }}).collect() // [1, 2, 3, 4, 5]
+ * 
+ */
+export function from_fn<T>(f: () => Option<T>): FromFn<T> {
+    return new FromFn(f)
+}
+
+
+class Successors<T> extends Iterator<T> {
     #next: Option<T>;
     #first: Option<T>;
     #succ: (value: T) => Option<T>;
@@ -1260,4 +1382,17 @@ export class Successors<T> extends Iterator<T> {
     override size_hint(): [number, Option<number>] {
         return is_some(this.#next) ? [1, null] : [0, 0]
     }
+}
+/**
+@description
+successors() takes two arguments, a 'first', and 'succ'.
+
+'first' will be the first element of the Iterator.
+succ() takes in the previous element, and returns the current element for next iteration.
+
+It will create an Iterator which will keep yielding elements until None is encountered.
+If 'first' was None, the resulting Iterator will be empty.
+ */
+export function successors<T>(first: Option<T>, succ: (value: T) => Option<T>): Successors<T> {
+    return new Successors(first, succ)
 }

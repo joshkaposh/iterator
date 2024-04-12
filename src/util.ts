@@ -1,5 +1,5 @@
+import type { Primitive } from "./iter/shared";
 import { type None, type Option, is_none, is_some } from "./option";
-import type { Primitive } from "./types";
 
 export type Prettify<T> = { [K in keyof T]: T[K] } & {}
 
@@ -55,8 +55,8 @@ export function is_arraylike<T>(obj?: unknown): obj is ArrayLike<T> {
     // @ts-expect-error
     return typeof obj !== 'function' && (typeof obj?.length === 'number' && obj.length >= 0)
 }
-
-export function unused(...args: any[]) { return args }
+// @ts-expect-error
+export function unused<T>(...args: any[]): T { }
 
 export function TODO<T>(msg?: string, ...unused_vars: any[]): T {
     unused(unused_vars)

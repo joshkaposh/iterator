@@ -1,8 +1,8 @@
 import { assert, expect, test } from 'vitest'
-import { DoubleEndedIterator, iter, ErrorExt, Generator, Iterator, from_fn } from "../src/iter";
+import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with } from "../src/iter";
+import { ErrorExt } from '../src/iter/shared';
 import { count, expect_error, fill, fill_string, fill_with, toInfinityAndBeyond } from './helpers';
-import { IteratorInputType, } from '../src/iter/shared';
-import { Option, is_some } from '../src';
+import { type IteratorInputType, } from '../src/iter/types';
 
 test('valid iter arguments', () => {
     iter_test([1], [1])
@@ -17,7 +17,7 @@ test('valid iter arguments', () => {
         return iter(arguments)
     }
 
-    function iter_test(it: IteratorInputType, expected: any[]) {
+    function iter_test(it: IteratorInputType<any>, expected: any[]) {
         expect(iter(it).collect()).toEqual(expected)
     }
 })
@@ -283,20 +283,35 @@ test('native_data_structures', () => {
 })
 
 test('free_standing_functions', () => {
-    const s = iter.successors(2, (v) => v < Math.pow(2, 5) ? v * v : null)
+    const from_f = from_fn(
+        (function () {
+            let count = 0;
+            return () => {
+                count++;
+                if (count > 5) {
+                    return
+                }
+                return count;
+            }
+        })()
+    )
+
+    expect(from_f.collect()).toEqual([1, 2, 3, 4, 5]);
+
+    const s = successors(2, (v) => v < Math.pow(2, 5) ? v * v : null)
     expect(s.collect()).toEqual([2, 4, 16, 256])
-    const once = iter.once(1)
-    assert(once.next().value === 1)
-    assert(once.next().value === undefined)
-    assert(once.into_iter().next().value === 1)
+    const o = once(1)
+    assert(o.next().value === 1)
+    assert(o.next().value === undefined)
+    assert(o.into_iter().next().value === 1)
 
-    expect(iter.repeat(69).take(5).collect()).toEqual([69, 69, 69, 69, 69])
+    expect(repeat(69).take(5).collect()).toEqual([69, 69, 69, 69, 69])
 
-    const once_with = iter.once_with(() => 1);
+    const ow = once_with(() => 1);
 
-    assert(once_with.next().value === 1)
-    assert(once_with.next().value === undefined)
-    assert(once_with.into_iter().next().value === 1)
+    assert(ow.next().value === 1)
+    assert(ow.next().value === undefined)
+    assert(ow.into_iter().next().value === 1)
 })
 
 test('map_while', () => {
@@ -464,6 +479,12 @@ test('find', () => {
     expect(it.find(v => v === 2)).toBe(2);
     expect(it.next().value).toBe(1);
 
+})
+
+test('fold', () => {
+    let it = iter([1, 2, 3]);
+    assert(it.fold(0, (v, x) => v + x) === 6);
+    assert(it.into_iter().rfold(0, (v, x) => v + x) === 6);
 })
 
 test('peekable', () => {

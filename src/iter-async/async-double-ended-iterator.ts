@@ -3,12 +3,12 @@ import { assert } from "../util";
 import { AsyncIterator } from "./async-iterator";
 import { ErrorExt, Item, MustReturn, NonZeroUsize, SizeHint, done, iter_item, non_zero_usize } from "../iter/shared";
 import { async_iter, from_async_fn } from ".";
-type AsyncDoubleEndedIteratorInputType<T> = Promise<T>[];
+import type { AsyncDoubleEndedIteratorInputType } from "./types";
 
 // @ts-expect-error
 export interface AsyncDoubleEndedIterator<T> {
     advance_back_by(n: number): Promise<Result<Ok<undefined>, NonZeroUsize>>
-    chain<O extends AsyncDoubleEndedIterator<any>, T2 extends Item<O>>(other: O, callback: (value: T2) => T2 | Promise<T2>): AsyncDoubleEndedIterator<T | T2>;
+    chain<O extends AsyncDoubleEndedIteratorInputType<any>, T2 extends Item<O>>(other: O, callback: (value: T2) => T2 | Promise<T2>): AsyncDoubleEndedIterator<T | T2>;
     zip<V>(other: any, callback: (value: V) => V | Promise<V>): AsyncDoubleEndedIterator<[T, V]>;
     into_iter(): AsyncDoubleEndedIterator<T>;
 }

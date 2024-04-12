@@ -1,7 +1,8 @@
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
-import { ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize, MustReturn, Item, SizeHint, IteratorInputType } from "../iter/shared";
-import { async_iter, from_async_fn } from ".";
-type AsyncIteratorInputType<T> = Promise<T>[];
+import { ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize, MustReturn, Item, SizeHint } from "../iter/shared";
+import { async_iter } from ".";
+import { unused } from "../util";
+import type { AsyncIteratorInputType } from "./types";
 
 export interface AsyncIterator<T> {
     advance_by(n: number): Promise<Result<Ok, NonZeroUsize>>
@@ -89,7 +90,7 @@ export abstract class AsyncIterator<T> {
         return new ArrayChunks(this as any, n)
     }
 
-    chain<O extends AsyncIterator<any> | (() => AsyncGenerator<any>), T2 extends Item<O>>(other: O, callback: (value: T2) => T2 | Promise<T2>): AsyncIterator<T | T2> {
+    chain<O extends AsyncIteratorInputType<any>, T2 extends Item<O>>(other: O, callback: (value: T2) => T2 | Promise<T2>): AsyncIterator<T | T2> {
         return new Chain(this as any, other as any, callback);
     }
 
@@ -417,7 +418,7 @@ class ArrayChunks<T> extends AsyncIterator<T[]> {
 class Chain<T1, T2> extends AsyncIterator<T1 | T2> {
     #iter: AsyncIterator<T1>
     #other: AsyncIterator<T2>
-    constructor(iterable: AsyncIterator<T1>, other: AsyncIterator<T2>, callback: (value: T2) => T2 | Promise<T2>) {
+    constructor(iterable: AsyncIterator<T1>, other: AsyncIteratorInputType<T2>, callback: (value: T2) => T2 | Promise<T2>) {
         super()
         this.#iter = iterable;
         this.#other = async_iter(other, callback as any);
@@ -570,8 +571,8 @@ class Flatten<T> extends AsyncIterator<T> {
                 return done();
             } else {
                 // just advanced outter, so return new n;
-                this.#inner = async_iter(n2.value, this.#callback as any)!;
-                return this.#inner.next()
+                this.#inner = async_iter(n2.value, this.#callback as any);
+                return this.#inner!.next()
             }
 
         } else {
@@ -599,6 +600,7 @@ class FlatMap<A, B> extends AsyncIterator<B> {
     #f: (value: A) => B | Promise<B>;
     constructor(it: AsyncIterator<AsyncIterator<A>>, f: (value: A) => B | Promise<B>, callback: (value: B) => B | Promise<B>) {
         super()
+        unused(callback)
         this.#flat = new Flatten(it, f as any);
         this.#f = f;
     }
@@ -1285,11 +1287,11 @@ class Zip<K, V> extends AsyncIterator<[K, V]> {
     }
 }
 //* --- free standing functions ---
-export class AsyncSuccessors<T> extends AsyncIterator<T> {
+class AsyncSuccessors<T> extends AsyncIterator<T> {
     #next: Option<T>;
     #first: Option<T>;
-    #succ: (value: T) => Promise<Option<T>>;
-    constructor(first: Option<T>, succ: (value: T) => Promise<Option<T>>) {
+    #succ: (value: T) => Option<T> | Promise<Option<T>>;
+    constructor(first: Option<T>, succ: (value: T) => Option<T> | Promise<Option<T>>) {
         super()
         this.#first = first;
         this.#next = first;
@@ -1314,6 +1316,31 @@ export class AsyncSuccessors<T> extends AsyncIterator<T> {
     override size_hint(): [number, Option<number>] {
         return is_some(this.#next) ? [1, null] : [0, 0]
     }
+}
+
+export async function async_successors<T>(first: Option<T>, succ: (value: T) => Option<T> | Promise<Option<T>>) {
+    return new AsyncSuccessors(first, succ)
+}
+
+class AsyncFromFn<T> extends AsyncIterator<T> {
+    #fn: () => Promise<Option<T>> | Option<T>;
+    constructor(fn: () => Promise<Option<T>> | Option<T>) {
+        super()
+        this.#fn = fn;
+    }
+
+    override into_iter(): AsyncIterator<T> {
+        return this
+    }
+
+    override async next(): Promise<IteratorResult<T>> {
+        const n = await this.#fn();
+        return is_some(n) ? iter_item(n) : done();
+    }
+}
+
+export function from_async_fn<T>(f: () => Promise<Option<T>> | Option<T>): AsyncFromFn<T> {
+    return new AsyncFromFn(f)
 }
 
 // //* --- common Iterators

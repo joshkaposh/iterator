@@ -1,4 +1,4 @@
-import { ErrorExt } from "./iter";
+import { ErrorExt } from "./iter/shared";
 
 export type None = null | undefined
 export type Option<T> = T | None;
