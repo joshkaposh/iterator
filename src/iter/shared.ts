@@ -1,14 +1,8 @@
+import type { AsOption, Err, Ok, Option, Result } from "../option";
 import { ExactSizeIterator, Iterator } from './iterator'
-import type { Result, Ok, Err, AsOption, Option } from "../option";
 import { is_error, is_some } from '../option';
-import { DoubleEndedIterator, ExactSizeDoubleEndedIterator } from '.';
-
-export type Item<It> = It extends Iterable<infer T> ? T : never;
-
-export type SizeHint<Lo = number, Hi = Option<number>> = [Lo, Hi]
-
-export type ArrayLikeType<T> = ArrayLike<T>
-export type GeneratorType<T> = Generator<T>
+import { DoubleEndedIterator, ExactSizeDoubleEndedIterator } from "./double-ended-iterator";
+import { is_arraylike } from "../util";
 
 export type DoubleEndedIteratorInputType<T = any> = ArrayLike<T> | DoubleEndedIterator<T>
 export type IteratorInputType<T = any> = (() => Generator<T>) | (() => IterableIterator<T>) | Iterator<T> | Iterable<T>;
@@ -25,6 +19,48 @@ export type Iter<It> =
     It extends ExactSizeIterator<T> ? ExactSizeIterator<T> : Iterator<T>
     : never;
 
+
+export type ArrayLikeType<T> = ArrayLike<T>
+export type GeneratorType<T> = Generator<T>
+
+
+
+export type Item<It> = It extends Iterable<infer T> ? T : never;
+
+export type SizeHint<Lo = number, Hi = Option<number>> = [Lo, Hi]
+
+export type MustReturn<F extends (...args: any[]) => any> = ReturnType<F> extends void ? never : F;
+export type Primitive = string | number | bigint | boolean | undefined | null | symbol;
+
+export type ValidIteratorInput = "iter" | "arraylike" | "iterable" | "function" | "invalid"
+
+export function iter_type<It extends IterInputType<any>>(iterable: It): ValidIteratorInput {
+    if (iterable instanceof Iterator) {
+        return 'iter'
+    } else if (is_arraylike(iterable)) {
+        return 'arraylike'
+        // @ts-expect-error
+    } else if (iterable && iterable[Symbol.iterator]) {
+        return 'iterable'
+    } else if (typeof iterable === 'function') {
+        return 'function'
+    } else {
+        return 'invalid'
+    }
+}
+
+
+
+export function collect<T>(iter: IterInputType<T>, into?: undefined): T[];
+export function collect<T, I extends (new (it: Iterable<T>) => any)>(iter: IterInputType<T>, into: I): InstanceType<I>
+export function collect<It extends Iterable<any>, Collection extends new (it: Iterable<Item<It>>) => any>(it: It, into?: Collection): InstanceType<Collection> | Item<It>[] {
+    if (into) {
+        return new into(it)
+    }
+
+    return Array.from(it as any) as any
+}
+
 export function done<TReturn>(): IteratorResult<TReturn> {
     return {
         done: true,
@@ -37,37 +73,6 @@ export function iter_item<T>(value: T): IteratorYieldResult<T> {
         done: false,
         value: value
     }
-}
-
-class FromFn<T> extends Iterator<T> {
-    #fn: () => Option<T>;
-    constructor(fn: () => Option<T>) {
-        super()
-        this.#fn = fn;
-    }
-
-    override into_iter(): Iterator<T> {
-        return this
-    }
-
-    override next(): IteratorResult<T> {
-        const n = this.#fn();
-        return is_some(n) ? iter_item(n) : done();
-    }
-}
-
-export function from_fn<T>(f: () => Option<T>): FromFn<T> {
-    return new FromFn(f)
-}
-
-export function collect<T>(iter: IterInputType<T>, into?: undefined): T[];
-export function collect<T, I extends (new (it: Iterable<T>) => any)>(iter: IterInputType<T>, into: I): InstanceType<I>
-export function collect<It extends Iterable<any>, Collection extends new (it: Iterable<Item<It>>) => any>(it: It, into?: Collection): InstanceType<Collection> | Item<It>[] {
-    if (into) {
-        return new into(it)
-    }
-
-    return Array.from(it as any) as any
 }
 
 export class ErrorExt<T = any> extends Error implements Err {

@@ -1,138 +1,234 @@
 import { test, expect, assert } from 'vitest';
-import { async_iter, iter } from '../src/iter';
+import { AsyncDoubleEndedIterator, AsyncIterator, async_iter, from_async_fn, from_iterable, is_error } from '../src/index';
 // KISS
+async function cb<T>(v: T) { return v }
 
 async function delay(ms: number) {
     return new Promise(r => setTimeout(r, ms))
 }
 
-async function delay_then<T>(ms: number, then: () => T): Promise<T> {
-    return new Promise(r => setTimeout(() => {
-        r(then())
-    }, ms))
+function delay_count(ms: number, n: number) {
+    let idx = -1;
+    return async () => {
+        idx++
+        if (idx >= n) {
+            return;
+        }
+        await delay(ms);
+        return idx + 1;
+    }
+}
+
+async function* gen_delay_count(ms = 10, n = 3) {
+    let idx = -1;
+    while (idx < n - 1) {
+        idx++
+        await delay(ms);
+        yield idx + 1;
+    }
+}
+
+function count(n: number) {
+    return async function* inner() {
+        let idx = -1;
+        while (idx < n - 1) {
+            idx++;
+            yield idx + 1
+        }
+    }
 }
 
 function fill(n: number) {
     return Array.from({ length: n }, (_, i) => i + 1);
 }
 
-test('Async DoubleEndedIterator', async () => {
-    const r = async_iter(fill(5)).rev();
-    expect(await r.collect()).toEqual([5, 4, 3, 2, 1]);
+test('expected return types', () => {
+    const a = async_iter([1, 2, 3], async (v) => {
+        await delay(100)
+        return v
+    })
+
+    assert(a instanceof AsyncDoubleEndedIterator);
+    assert(async_iter(new ReadableStream(), (v) => v) instanceof AsyncIterator);
+    assert(async_iter(delay_count, (v) => v) instanceof AsyncIterator);
+})
+
+test('from_iterable_to_async_iterator', () => {
+    const m = new Map();
+    m.set('k1', 'v1');
+    m.set('k2', 'v2');
+
+
+    async_iter.from_sync(m.values())
+
+
+})
+
+test('It works (most methods)', async () => {
+    let it = async_iter(count(3), cb).map(v => v * v).map(v => v * v);
+    let n: any;
+    expect(await it.collect()).toEqual([1, 16, 81])
+    it = async_iter(count(4), cb).filter(v => v % 2 === 0).map(v => v * v).map(v => v * v);
+    expect(await it.collect()).toEqual([16, 256]);
+    it = async_iter(count(3), cb).chain(count(3) as any, cb);
+    expect(await it.collect()).toEqual([1, 2, 3, 1, 2, 3]);
+    it = async_iter([1, 2, 3], cb).chain([4, 5, 6] as any, cb).rev();
+    expect(await it.collect()).toEqual([6, 5, 4, 3, 2, 1]);
+    assert(async_iter(count(3), cb).eq(async_iter(count(3), cb) as any));
+    assert(async_iter(count(3), cb).eq_by(async_iter(count(3), cb) as any, (a, b) => a === b));
+    assert(await async_iter(count(3), cb).any(v => v === 1));
+    assert(!(await async_iter(count(3), cb).all(v => v === 1)));
+    it = async_iter(count(25), cb);
+    expect(await it.next_chunk(10)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(await it.next_chunk(10)).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    n = await it.next_chunk(10);
+    assert(is_error(n));
+    expect(n.get()).toEqual([21, 22, 23, 24, 25]);
+    expect((await it.next()).value).toBe(undefined);
+    it = async_iter(count(25), cb).array_chunks(5) as any;
+    expect((await it.next()).value).toEqual([1, 2, 3, 4, 5]);
+    expect((await it.next()).value).toEqual([6, 7, 8, 9, 10]);
+    expect((await it.next()).value).toEqual([11, 12, 13, 14, 15]);
+    expect((await it.next()).value).toEqual([16, 17, 18, 19, 20]);
+    expect((await it.next()).value).toEqual([21, 22, 23, 24, 25]);
+    expect((await it.next()).value).toBe(undefined);
+
+    it = async_iter(count(10), cb);
+
+    expect(await it.collect()).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(await it.collect()).toEqual([]);
+    expect(await it.into_iter().collect()).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+    it = async_iter(count(10), cb).enumerate() as any;
+    expect(await it.collect()).toEqual([
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 5],
+        [5, 6],
+        [6, 7],
+        [7, 8],
+        [8, 9],
+        [9, 10],
+    ]);
+
+    expect(await it.collect()).toEqual([])
+
+    expect(await it.into_iter().collect()).toEqual([
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 5],
+        [5, 6],
+        [6, 7],
+        [7, 8],
+        [8, 9],
+        [9, 10],
+    ]);
+
+    it = async_iter(count(100), cb);
+
+    assert((await it.nth(0)).value === 1);
+    assert((await it.nth(0)).value === 2);
+    assert((await it.nth(9)).value === 12);
+    assert((await it.nth(9)).value === 22);
+    assert((await it.nth(9)).value === 32);
+    assert((await it.nth(9)).value === 42);
+    assert((await it.nth(9)).value === 52);
+    assert((await it.nth(9)).value === 62);
+    assert((await it.nth(9)).value === 72);
+    assert((await it.nth(9)).value === 82);
+    assert((await it.nth(9)).value === 92);
+    assert((await it.nth(9)).done);
+    assert((await it.nth(0)).done);
+
+    it.into_iter();
+
+    assert(!(await it.advance_by(0)))
+    assert((await it.next()).value === 1)
+    assert(!(await it.advance_by(1)))
+    assert((await it.next()).value === 3)
+
 }, 15000)
 
 test('Async iterator', async () => {
-    const t = async_iter(fill(3));
+    const it = from_async_fn(delay_count(10, 3));
+    const gen = async_iter(gen_delay_count, v => v);
 
-    expect(await t.collect()).toEqual(fill(3));
-    assert(await async_iter(fill(50)).count() === 50);
+    assert((await it.next()).value === 1);
+    assert((await it.next()).value === 2);
+    assert((await it.next()).value === 3);
+    assert((await it.next()).done);
 
-    const m = async_iter(fill(3)).map(v => v * v).map(v => v * v);
-    expect(await m.collect()).toEqual([1, 16, 81])
+    assert((await gen.next()).value === 1);
+    assert((await gen.next()).value === 2);
+    assert((await gen.next()).value === 3);
+    assert((await gen.next()).done);
 
-    assert(await async_iter(fill(3)).filter(v => v % 2 === 0).count() === 1)
+    const mm = async_iter(gen_delay_count, (v) => v)
+        .map(v => v * v)
+        .map(v => v * v)
 
-    const chunks = async_iter(fill(15));
-    const c1 = await chunks.next_chunk(10);
-    assert(!(c1 instanceof Error) && c1.length === 10);
-    expect(c1).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    const r = await chunks.next_chunk(10);
-    assert(r instanceof Error && r.get().length === 5);
-    expect(r.get()).toEqual([11, 12, 13, 14, 15])
+    expect(await mm.collect()).toEqual([1, 16, 81])
+    expect(await mm.collect()).toEqual([]);
+    expect(await mm.into_iter().collect()).toEqual([1, 16, 81])
 
-    assert(await async_iter(fill(3)).eq(async_iter(fill(3))) === true);
+    const fmm = async_iter(gen_delay_count, (v) => v)
+        .filter(v => v % 2 === 0)
+        .map(v => v * v)
+        .map(v => v * v)
 
-    expect(async_iter(fill(3)).fold(0, async (acc, x) => acc + x))
+    expect(await fmm.collect()).toEqual([16])
+    expect(await fmm.collect()).toEqual([]);
+    expect(await fmm.into_iter().collect()).toEqual([16])
 
-
-    // const b1 = await async_iter(fill(4)).eq(async_iter(fill(3)));
-    // const b2 = await async_iter(fill(3)).eq(async_iter(fill(4)))
-    // assert(b1 === b2 && b1 === false)
-    // const size_hint = async_iter(fill(5));
-    // expect(size_hint.size_hint()).toEqual([5, 5]);
-    // size_hint.next()
-    // expect(size_hint.size_hint()).toEqual([4, 4]);
-    // size_hint.next()
-    // expect(size_hint.size_hint()).toEqual([3, 3]);
-    // size_hint.next()
-    // expect(size_hint.size_hint()).toEqual([2, 2]);
-    // size_hint.next()
-    // expect(size_hint.size_hint()).toEqual([1, 1]);
-    // size_hint.next()
-    // expect(size_hint.size_hint()).toEqual([0, 0]);
-    // expect(size_hint.size_hint()).toEqual([0, 0]);
-    // expect(size_hint.size_hint()).toEqual([0, 0]);
 
 }, 15000);
 
-test('Flatten', async () => {
-    const none = [];
-    const empty = [[], [], []];
-    const two_wide = [[1, 2], [3, 4], [5, 6]];
-    const three_wide = [[1, 2, 3], [4, 5, 6]];
-    const five_wide = [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]];
+test('Async DoubleEndedIterator', async () => {
+    expect(await async_iter([], (v) => v).collect()).toEqual([])
 
-    const expected = [1, 2, 3, 4, 5, 6];
-    const rev = structuredClone(expected).reverse()
+    const a = await async_iter([1, 2, 3], async (v) => {
+        await delay(10)
+        return v
+    }).rev().collect();
 
-    const long = Array.from({ length: 10 }, (_) => Array.from({ length: 10 }, (_, i) => i + 1))
-    const expected_long = iter(fill(10)).cycle().take(100).collect();
+    expect(a).toEqual([3, 2, 1])
 
-    expect(await async_iter(two_wide).flatten().collect()).toEqual(expected)
-    expect(await async_iter(three_wide).flatten().collect()).toEqual(expected)
-    // expect(async_iter(two_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
-    // expect(async_iter(three_wide[Symbol.iterator]()).flatten().collect()).toEqual(expected)
+}, 15000)
 
-    expect(await async_iter(none).collect()).toEqual([])
-    expect(await async_iter(empty).flatten().collect()).toEqual([])
-    expect(await async_iter(empty).flatten().rev().collect()).toEqual([])
+test('async_flatten', async () => {
+    const arr = [[1, 2, 3], [4, 5, 6]];
 
-    expect(await async_iter(long).flatten().collect()).toEqual(expected_long)
-    expect(await async_iter(three_wide).flatten().rev().collect()).toEqual(rev)
+    expect(await async_iter([], cb).flatten(cb).collect()).toEqual([]);
+    expect(await async_iter([[]], cb).flatten(cb).collect()).toEqual([]);
+    expect(await async_iter([[], [], []], cb).flatten(cb).collect()).toEqual([]);
 
-    const flat = async_iter(three_wide).flatten().rev();
-    let n = await flat.next()
-    expect(n.value).toBe(6);
-    n = await flat.next_back()
-    expect(n.value).toBe(1);
-    n = await flat.next()
-    expect(n.value).toBe(5);
-    n = await flat.next_back()
-    expect(n.value).toBe(2);
-    n = await flat.next()
-    expect(n.value).toBe(4);
-    n = await flat.next_back()
-    expect(n.value).toBe(3);
-    n = await flat.next()
-    expect(n.value).toBe(undefined);
+    expect(await async_iter([[1, 2, 3], [4, 5, 6]], cb).flatten(cb).collect()).toEqual([1, 2, 3, 4, 5, 6]);
 
-    const f = async_iter([['a1', 'a2', 'a3'], ['b1', 'b2', 'b3']]).flatten();
+    const it = async_iter([[1, 2, 3], [4, 5, 6]], cb).flatten(cb);
 
-    expect((await f.next()).value).toBe('a1');
-    expect((await f.next_back()).value).toBe('b3');
-    expect((await f.next()).value).toBe('a2');
-    expect((await f.next()).value).toBe('a3');
-    expect((await f.next()).value).toBe('b1');
-    expect((await f.next_back()).value).toBe('b2');
-    expect((await f.next()).value).toBe(undefined);
-    expect((await f.next_back()).value).toBe(undefined);
+    assert((await it.next()).value === 1)
+    assert((await it.next_back()).value === 6)
+    assert((await it.next_back()).value === 5)
+    assert((await it.next_back()).value === 4)
+    assert((await it.next_back()).value === 3)
+    assert((await it.next()).value === 2)
+    assert((await it.next()).value === undefined)
+    assert((await it.next_back()).value === undefined)
 
-    const flat_long = async_iter(five_wide).flatten().rev();
+    expect(
+        await async_iter(flatten_me, cb)
+            .flatten(cb)
+            .collect()
+    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
 
-    expect((await flat_long.next()).value).toBe(10);
-    expect((await flat_long.next()).value).toBe(9);
-    expect((await flat_long.next()).value).toBe(8);
-    expect((await flat_long.next()).value).toBe(7);
-    expect((await flat_long.next()).value).toBe(6);
-    expect((await flat_long.next()).value).toBe(5);
+    async function* flatten_me() {
+        yield [1, 2, 3]
+        yield [4, 5, 6]
+        yield [7, 8, 9, 10, 11, 12, 13, 14, 15]
+    }
 
-    expect((await flat_long.next_back()).value).toBe(1);
-    expect((await flat_long.next_back()).value).toBe(2);
-    expect((await flat_long.next()).value).toBe(4);
-    expect((await flat_long.next()).value).toBe(3);
-
-    expect((await flat_long.next()).value).toBe(undefined);
-    expect((await flat_long.next_back()).value).toBe(undefined);
-
-    expect(await flat_long.into_iter().collect()).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1])
-})
+}, 15000)

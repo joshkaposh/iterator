@@ -1,4 +1,5 @@
 import { type None, type Option, is_none, is_some } from "./option";
+import type { Primitive } from "./types";
 
 export type Prettify<T> = { [K in keyof T]: T[K] } & {}
 
@@ -7,7 +8,6 @@ export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <
     T
 >() => T extends Y ? 1 : 2
     ? true : false;
-
 
 type MissingKey<T1 extends PropertyKey, T2 extends PropertyKey> =
     Exclude<T1, T2> |
@@ -27,9 +27,6 @@ type MissingMap<T1, T2, K1 extends PropertyKey, K2 extends PropertyKey> = {
 
 export type Missing<T1, T2, K1 extends PropertyKey, K2 extends PropertyKey> = MissingMap<T1, T2, K1, K2>[keyof MissingMap<T1, T2, K1, K2>]
 
-
-export type MustReturn<F extends (...args: any[]) => any> = ReturnType<F> extends void ? never : F;
-
 // TODO: deep copy
 export type Immut<T> = {
     +readonly [K in keyof T]: T[K]
@@ -38,8 +35,6 @@ export type Immut<T> = {
 export type Mut<T> = {
     -readonly [K in keyof T]: T[K]
 }
-
-export type Primitive = string | number | bigint | boolean | undefined | null | symbol;
 
 export function is_primitive(value: unknown): value is Primitive {
 
@@ -56,7 +51,8 @@ export function is_primitive(value: unknown): value is Primitive {
     }
 }
 
-export function is_arraylike<T>(obj?: (string | object) & { length?: number }): obj is ArrayLike<T> {
+export function is_arraylike<T>(obj?: unknown): obj is ArrayLike<T> {
+    // @ts-expect-error
     return typeof obj !== 'function' && (typeof obj?.length === 'number' && obj.length >= 0)
 }
 

@@ -1,54 +1,6 @@
 import { iter } from ".";
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
-import { type MustReturn } from "../util";
-import { ErrorExt, Item, IteratorInputType, NonZeroUsize, SizeHint, collect, done, from_fn, iter_item, non_zero_usize } from "./shared";
-
-// type IteratorRequiredMethods<It, T = Item<It>> = {
-//     next(): IteratorResult<T>;
-//     into_iter(): It;
-// }
-
-// type IteratorOtherMethods<It, T = Item<It>> = {
-//     advance_by(n: number): Result<Ok, NonZeroUsize>;
-
-//     any(predicate: (value: T) => boolean): boolean;
-//     all(predicate: (value: T) => boolean): boolean;
-
-//     count(): number;
-
-//     eq(other: It): boolean;
-
-//     find(predicate: (value: T) => boolean): Option<T>;
-//     fold<Acc>(initial: Acc, f: (acc: Acc, x: T) => Acc): Acc;
-//     for_each(fn: (value: T) => void): It;
-
-//     try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err>;
-
-// }
-
-export type IteratorAdapter<T, T2 = any> = {
-    array_chunks(n: number): Iterator<T[]>;
-    chain(other: Iterator<T2>): Iterator<T | T2>;
-    cycle(): Iterator<T>;
-    enumerate(): Iterator<[number, T]>;
-    flat_map(fn: (value: T) => T2): Iterator<T2>;
-    // @ts-expect-error
-    flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): Iterator<T>;
-    filter(predicate: (value: T) => boolean): Iterator<T>;
-    fuse(): Iterator<T>;
-    inspect(fn: (value: T) => void): Iterator<T>;
-    intersperse(separator: T): Iterator<T>;
-    intersperse_with(separator: () => T): Iterator<T>;
-    map(fn: (value: T) => T2): Iterator<T2>;
-    map_while(fn: (value: T) => Option<T2>): Iterator<T2>;
-    skip(n: number): Iterator<T>;
-    skip_while(predicate: (value: T) => boolean): Iterator<T>;
-    step_by(n: number): Iterator<T>;
-    take(n: number): Iterator<T>;
-    take_while(predicate: (value: T) => boolean): Iterator<T>;
-    peekable(): Iterator<T>;
-    zip(other: Iterator<T2>): Iterator<[T, T2]>;
-}
+import { collect, ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize, type IteratorInputType, type MustReturn, type Item, type SizeHint } from "./shared";
 
 export interface Iterator<T> {
     advance_by(n: number): Result<Ok, NonZeroUsize>
@@ -141,6 +93,10 @@ export abstract class Iterator<T> {
         return new Filter(this, callback)
     }
 
+    filter_map<B>(callback: MustReturn<(value: T) => Option<B>>): Iterator<B> {
+        return new FilterMap(this, callback)
+    }
+
     // @ts-expect-error
     flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): Iterator<T> {
         return new Flatten(this as any)
@@ -191,6 +147,22 @@ export abstract class Iterator<T> {
 
     intersperse_with(separator: () => T): Iterator<T> {
         return new IntersperseWith(this, separator)
+    }
+
+    is_sorted(): boolean {
+        const it = this.peekable();
+        let n;
+        while (!(n = it.next()).done) {
+            const p = it.peek();
+            if (p.done) {
+                // no more comparisons to make
+                return true
+            }
+            if (n.value > p.value) {
+                return false
+            }
+        }
+        return undefined as never
     }
 
     last(): Option<T> {
@@ -363,6 +335,27 @@ export class FusedIterator<T> extends Iterator<T> {
     }
 }
 
+class FromFn<T> extends Iterator<T> {
+    #fn: () => Option<T>;
+    constructor(fn: () => Option<T>) {
+        super()
+        this.#fn = fn;
+    }
+
+    override into_iter(): Iterator<T> {
+        return this
+    }
+
+    override next(): IteratorResult<T> {
+        const n = this.#fn();
+        return is_some(n) ? iter_item(n) : done();
+    }
+}
+
+export function from_fn<T>(f: () => Option<T>): FromFn<T> {
+    return new FromFn(f)
+}
+
 class ArrayChunks<T> extends Iterator<T[]> {
     #remainder: Option<T[]>
     #n: number;
@@ -404,7 +397,7 @@ class Chain<T1, T2> extends Iterator<T1 | T2> {
     constructor(iterable: Iterator<T1>, other: Iterator<T2>) {
         super()
         this.#iter = iterable;
-        this.#other = iter(other);
+        this.#other = iter(other) as any;
     }
 
     override into_iter(): Iterator<T1 | T2> {
@@ -451,9 +444,9 @@ class Enumerate<T> extends Iterator<[number, T]> {
         this.#iter = iterable;
     }
 
-
     override into_iter(): Iterator<[number, T]> {
         this.#iter.into_iter();
+        this.#index = -1;
         return this
     }
 
@@ -493,7 +486,6 @@ class Filter<T> extends Iterator<T> {
     }
 }
 
-// @ts-expect-error
 class FilterMap<A, B> extends Iterator<B> {
 
     #iter: Iterator<A>;
@@ -548,8 +540,8 @@ class Flatten<T> extends Iterator<T> {
                 return done();
             } else {
                 // just advanced outter, so return new n;
-                this.#inner = iter(n2.value);
-                return this.#inner.next()
+                this.#inner = iter(n2.value) as any;
+                return this.#inner!.next()
             }
 
         } else {
@@ -702,10 +694,9 @@ class IntersperseWith<T> extends Iterator<T> {
         this.#gen = gen;
     }
 
-
-
     override into_iter(): Iterator<T> {
         this.#iter.into_iter();
+        this.#needs_sep = false;
         return this
     }
 
@@ -1222,7 +1213,7 @@ class Zip<K, V> extends Iterator<[K, V]> {
     constructor(iterable: Iterator<K>, other: IteratorInputType<V>) {
         super()
         this.#iter = iterable;
-        this.#other = iter(other)
+        this.#other = iter(other) as any
     }
 
     override into_iter(): Iterator<[K, V]> {

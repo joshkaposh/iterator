@@ -1,7 +1,8 @@
 import { assert, expect, test } from 'vitest'
-import { DoubleEndedIterator, iter, ErrorExt, Generator, Iterator } from "../src/iter";
+import { DoubleEndedIterator, iter, ErrorExt, Generator, Iterator, from_fn } from "../src/iter";
 import { count, expect_error, fill, fill_string, fill_with, toInfinityAndBeyond } from './helpers';
-import { IteratorInputType, from_fn } from '../src/iter/shared';
+import { IteratorInputType, } from '../src/iter/shared';
+import { Option, is_some } from '../src';
 
 test('valid iter arguments', () => {
     iter_test([1], [1])
@@ -392,6 +393,11 @@ test('intersperse / intersperse_with', () => {
     expect(all2).toBe(all)
 })
 
+test('is_sorted', () => {
+    let it = iter([1, 2, 2, 2, 2, 2, 3, 4, 5]);
+    assert(it.is_sorted());
+})
+
 test('string', () => {
     expect(iter('hello world').collect()).toEqual(['h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'])
 })
@@ -424,15 +430,15 @@ test('generator', () => {
 
 })
 
-// TODO: implement
-// test('Filter map', () => {
-//     const it = iter.of<string | number>('1', 2, '3').filter_map(v => {
-//         if (typeof v === 'string') {
-//             return Number(v);
-//         }
-//         return v
-//     })
-// })
+test('filter_map', () => {
+    const f = iter([1, 2, 3, 4]).filter_map(v => v % 2 === 0 ? v * v : null).map(v => v * v)
+    expect(f.collect()).toEqual([16, 256])
+    expect(f.collect()).toEqual([])
+    expect(f.into_iter().collect()).toEqual([16, 256])
+
+    const f2 = iter([1, 2, 3, 4]).rev().filter_map(v => v % 2 === 0 ? v * v : null).map(v => v * v)
+    expect(f2.collect()).toEqual([256, 16])
+})
 
 test('try_fold', () => {
     let it = iter(fill(3))
@@ -625,7 +631,7 @@ test('iter invalid argument', () => {
     expect_error(() => iter(null as any), "Cannot construct an Iterator from primitive 'null'")
     expect_error(() => iter(0 as any), "Cannot construct an Iterator from primitive '0'")
     expect_error(() => iter(true as any), "Cannot construct an Iterator from primitive 'true'")
-    expect_error(() => iter({} as any), "Iter cannot construct an Iterator from an object that is not Arraylike");
+    expect_error(() => iter({} as any), "Iter cannot construct an Iterator from an object that is not Arraylike or has no [Symbol.iterator] method.");
 })
 
 test('spread operator', () => {

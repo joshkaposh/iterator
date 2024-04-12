@@ -1,7 +1,7 @@
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
-import { type Item, type SizeHint, ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize, from_fn, DoubleEndedIteratorInputType, IteratorInputType } from "./shared";
-import { Iterator } from './iterator'
-import { assert, MustReturn } from "../util";
+import { Iterator, from_fn } from './iterator'
+import { DoubleEndedIteratorInputType, IteratorInputType, ErrorExt, non_zero_usize, NonZeroUsize, done, iter_item, Item, MustReturn, SizeHint, } from "./shared";
+import { assert } from "../util";
 import { iter } from ".";
 
 export interface DoubleEndedIterator<T> {
@@ -37,6 +37,10 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
 
     override filter(callback: (value: T) => boolean): DoubleEndedIterator<T> {
         return new Filter(this, callback)
+    }
+
+    override filter_map<B>(callback: MustReturn<(value: T) => Option<B>>): DoubleEndedIterator<B> {
+        return new FilterMap(this, callback)
     }
 
     // @ts-expect-error
@@ -99,6 +103,10 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
 
     override skip(n: number): ExactSizeDoubleEndedIterator<T> {
         return new Skip(this, n)
+    }
+
+    override skip_while(predicate: (value: T) => boolean): DoubleEndedIterator<T> {
+        return new SkipWhile(this, predicate)
     }
 
     override take(n: number): DoubleEndedIterator<T> {
@@ -288,6 +296,10 @@ class Filter<T> extends DoubleEndedIterator<T> {
         return this
     }
 
+    override size_hint(): [number, Option<number>] {
+        return this.#iter.size_hint();
+    }
+
     override next(): IteratorResult<T> {
         let n;
         while (!(n = this.#iter.next()).done) {
@@ -311,6 +323,44 @@ class Filter<T> extends DoubleEndedIterator<T> {
 
             if (this.#callback(n.value)) {
                 return n
+            }
+        }
+        return done()
+    }
+}
+
+class FilterMap<A, B> extends DoubleEndedIterator<B> {
+    #iter: DoubleEndedIterator<A>;
+    #fn: (value: A) => Option<B>;
+
+    constructor(iter: DoubleEndedIterator<A>, fn: (value: A) => Option<B>) {
+        super();
+        this.#iter = iter
+        this.#fn = fn;
+    }
+
+    override into_iter(): DoubleEndedIterator<B> {
+        this.#iter.into_iter();
+        return this;
+    }
+
+    override next(): IteratorResult<B> {
+        let n;
+        while (!(n = this.#iter.next()).done) {
+            const elt = this.#fn(n.value);
+            if (is_some(elt)) {
+                return iter_item(elt);
+            }
+        }
+        return done()
+    }
+
+    override next_back(): IteratorResult<B> {
+        let n;
+        while (!(n = this.#iter.next_back()).done) {
+            const elt = this.#fn(n.value);
+            if (is_some(elt)) {
+                return iter_item(elt);
             }
         }
         return done()
@@ -413,7 +463,7 @@ class Flatten<T> extends DoubleEndedIterator<T> {
             } else {
                 // just advanced outter, so return new n;
                 this.#backiter = iter(outter.value);
-                return this.#backiter.next_back()
+                return this.#backiter!.next_back()
             }
 
         } else {
@@ -728,6 +778,7 @@ class SkipWhile<T> extends DoubleEndedIterator<T> {
 
     override into_iter(): DoubleEndedIterator<T> {
         this.#iter.into_iter();
+        this.#needs_skip = true;
         return this;
     }
 
@@ -758,7 +809,6 @@ class SkipWhile<T> extends DoubleEndedIterator<T> {
             }
         }
     }
-
 }
 
 class StepBy<T> extends ExactSizeDoubleEndedIterator<T> {
@@ -1379,41 +1429,4 @@ export class RepeatWith<T> extends DoubleEndedIterator<T> {
     override size_hint(): [number, Option<number>] {
         return [Number.MAX_SAFE_INTEGER, null]
     }
-}
-
-export type DoubleEndedIteratorAdapter<T, T2 = any> = {
-    chain: Chain<T, T2>;
-    cycle: Cycle<T>;
-    enumerate: Enumerate<T>;
-    flatmap: FlatMap<T, T2>;
-    flatten: Flatten<T>;
-    filter: Filter<T>;
-    map: Map<T, T2>;
-    mapwhile: MapWhile<T, T2>;
-    skip: Skip<T>;
-    skipwhile: SkipWhile<T>;
-    step: StepBy<T>;
-    take: Take<T>;
-    takewhile: TakeWhile<T>;
-    peekable: Peekable<T>;
-    zip: Zip<T, T2>;
-}
-
-
-export const DoubleEndedIteratorAdapters = {
-    Chain,
-    Cycle,
-    FlatMap,
-    Flatten,
-    Filter,
-    Enumerate,
-    Map,
-    MapWhile,
-    Skip,
-    SkipWhile,
-    StepBy,
-    Take,
-    TakeWhile,
-    Peekable,
-    Zip,
 }

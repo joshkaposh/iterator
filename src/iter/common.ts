@@ -1,8 +1,7 @@
-
-import { Iterator } from "./iterator";
-import { ExactSizeDoubleEndedIterator } from './double-ended-iterator'
-import { type ArrayLikeType, type GeneratorType, NonZeroUsize, done, iter_item, non_zero_usize } from "./shared";
+import { NonZeroUsize, done, iter_item, non_zero_usize, GeneratorType, ArrayLikeType } from "./shared";
 import { type Result, is_some } from "../option";
+import { Iterator } from "./iterator";
+import { ExactSizeDoubleEndedIterator } from './double-ended-iterator';
 
 export class Generator<T> extends Iterator<T> {
     #into_iter: () => GeneratorType<T>;
