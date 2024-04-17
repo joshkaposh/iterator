@@ -2,7 +2,7 @@ import { AsyncIterator } from "../iter-async";
 import { is_arraylike, is_primitive } from "../util";
 import { ArrayLike } from "./double-ended-iterator";
 import { Generator, Iterator } from "./iterator";
-import type { IterInputType, Iter } from './types'
+import type { IterInputType, Iter } from '../types'
 
 export function iter_type<It extends IterInputType<any>>(iterable: It) {
     if (iterable instanceof Iterator || iterable instanceof AsyncIterator) {
@@ -41,8 +41,6 @@ export function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
 
 export * from './iterator'
 export * from './double-ended-iterator';
-
-export type * from './types';
 
 export {
     is_arraylike,

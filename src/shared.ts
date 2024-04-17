@@ -1,14 +1,4 @@
-import { Ok, is_error, type AsOption, type Err, type Option, type Result } from "../option";
-
-export type ArrayLikeType<T> = ArrayLike<T>;
-export type GeneratorType<T> = Generator<T>;
-
-export type Item<It> = It extends Iterable<infer T> ? T : never;
-
-export type SizeHint<Lo = number, Hi = Option<number>> = [Lo, Hi]
-
-export type MustReturn<F extends (...args: any[]) => any> = ReturnType<F> extends void ? never : F;
-export type Primitive = string | number | bigint | boolean | undefined | null | symbol;
+import { Ok, is_error, type AsOption, type Err, type Result } from "./option";
 
 export function done<TReturn>(): IteratorResult<TReturn> {
     return {
@@ -23,7 +13,6 @@ export function iter_item<T>(value: T): IteratorYieldResult<T> {
         value: value
     }
 }
-
 
 export class ErrorExt<T = any> extends Error implements Err {
     #err_data: T;
@@ -43,7 +32,6 @@ export class ErrorExt<T = any> extends Error implements Err {
         return this.#err_data
     }
 }
-
 
 export class NonZeroUsize extends ErrorExt<number> {
     constructor(err_data: number, options?: ErrorOptions) {

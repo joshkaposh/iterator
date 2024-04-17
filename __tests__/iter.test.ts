@@ -1,8 +1,7 @@
 import { assert, expect, test } from 'vitest'
-import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with } from "../src/iter";
-import { ErrorExt } from '../src/iter/shared';
+import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with, ErrorExt } from "../src";
 import { count, expect_error, fill, fill_string, fill_with, toInfinityAndBeyond } from './helpers';
-import { type IteratorInputType, } from '../src/iter/types';
+import { type IteratorInputType } from '../src/types';
 
 test('valid iter arguments', () => {
     iter_test([1], [1])

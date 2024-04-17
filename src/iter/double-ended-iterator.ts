@@ -1,8 +1,8 @@
 import { assert } from "../util";
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
 import { Iterator, from_fn } from './iterator'
-import type { DoubleEndedIteratorInputType } from './types'
-import { done, iter_item, Item, type MustReturn, type SizeHint, type ArrayLikeType, NonZeroUsize, ErrorExt, non_zero_usize } from "./shared";
+import type { DoubleEndedIteratorInputType, Item, MustReturn, SizeHint, ArrayLikeType } from '../types'
+import { done, iter_item, NonZeroUsize, ErrorExt, non_zero_usize } from "../shared";
 import { iter } from ".";
 
 export interface DoubleEndedIterator<T> {

@@ -1,11 +1,10 @@
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
 import { assert } from "../util";
 import { AsyncIterator } from "./async-iterator";
-import { ErrorExt, Item, MustReturn, NonZeroUsize, SizeHint, done, iter_item, non_zero_usize } from "../iter/shared";
+import { ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize } from "../shared";
 import { async_iter, from_async_fn } from ".";
-import type { AsyncDoubleEndedIteratorInputType } from "./types";
+import type { AsyncDoubleEndedIteratorInputType, SizeHint, Item, MustReturn } from "../types";
 
-// @ts-expect-error
 export interface AsyncDoubleEndedIterator<T> {
     advance_back_by(n: number): Promise<Result<Ok<undefined>, NonZeroUsize>>
     chain<O extends AsyncDoubleEndedIteratorInputType<any>, T2 extends Item<O>>(other: O, callback: (value: T2) => T2 | Promise<T2>): AsyncDoubleEndedIterator<T | T2>;
@@ -26,53 +25,43 @@ export abstract class AsyncDoubleEndedIterator<T> extends AsyncIterator<T> {
         return undefined as Ok
     }
 
-    // @ts-expect-error
     override chain<O extends AsyncDoubleEndedIterator<any> | (() => AsyncGenerator<any>), T2 extends Item<O>>(other: O, callback: (value: T2) => T2 | Promise<T2>): AsyncDoubleEndedIterator<T | T2> {
         return new Chain(this as any, other as any, callback)
     }
 
-    // @ts-expect-error
     override cycle(): AsyncDoubleEndedIterator<T> {
         return new Cycle(this);
     }
 
-    // @ts-expect-error
     override enumerate(): AsyncDoubleEndedIterator<[number, T]> {
         return new Enumerate(this)
     }
 
-    // @ts-expect-error
     override filter(predicate: (value: T) => boolean): AsyncDoubleEndedIterator<T> {
         return new Filter(this, predicate)
     }
 
 
-    // @ts-expect-error
-    override flatten<O extends T extends Iterable<infer T2> ? T2 : never>(callback: (value: O) => O | Promise<O>): AsyncDoubleEndedIterator<O> {
-        return new Flatten(this as any, callback) as any
+    override flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): AsyncDoubleEndedIterator<O> {
+        return new Flatten(this as any) as any
     }
 
-    // @ts-expect-error
-    override flat_map<B>(f: MustReturn<(value: T) => B>, callback: (value: B) => B | Promise<B>): AsyncDoubleEndedIterator<B> {
-        return new FlatMap(this as any, f, callback)
+    override flat_map<B>(f: MustReturn<(value: T) => B>): AsyncDoubleEndedIterator<B> {
+        return new FlatMap(this as any, f)
     }
 
-    // @ts-expect-error
     override fuse(): AsyncDoubleEndedIterator<T> {
         return new FusedAsyncDoubleEndedIterator(this);
     }
 
-    // @ts-expect-error
     override inspect(callback: (value: T) => void): AsyncDoubleEndedIterator<T> {
         return new Inspect(this, callback)
     }
 
-    // @ts-expect-error
     override map<B>(f: MustReturn<(value: T) => Promise<B> | B>): AsyncDoubleEndedIterator<B> {
         return new Map(this, f) as unknown as AsyncDoubleEndedIterator<B>
     }
 
-    // @ts-expect-error
     override map_while<B>(f: MustReturn<(value: T) => B>): AsyncDoubleEndedIterator<B> {
         return new MapWhile(this, f)
     }
@@ -99,7 +88,6 @@ export abstract class AsyncDoubleEndedIterator<T> extends AsyncIterator<T> {
         return await this.next_back();
     }
 
-    // @ts-expect-error
     override peekable(): AsyncDoubleEndedIterator<T> & { peek: () => Promise<IteratorResult<T>>; } {
         return new Peekable(this)
     }
@@ -133,25 +121,23 @@ export abstract class AsyncDoubleEndedIterator<T> extends AsyncIterator<T> {
 
         return acc;
     }
-    // @ts-expect-error
+
     override skip(n: number): AsyncDoubleEndedIterator<T> {
         return new Skip(this, n)
     }
-    // @ts-expect-error
+
     override skip_while(predicate: (value: T) => boolean): AsyncDoubleEndedIterator<T> {
         return new SkipWhile(this, predicate);
     }
-    // @ts-expect-error
+
     override step_by(n: number): AsyncDoubleEndedIterator<T> {
         return new StepBy(this as any, n);
     }
 
-    // @ts-expect-error
     override take(n: number): AsyncDoubleEndedIterator<T> {
         return new Take(this as any, n)
     }
 
-    // @ts-expect-error
     override take_while(callback: (value: T) => boolean): AsyncDoubleEndedIterator<T> {
         return new TakeWhile(this, callback);
     }
@@ -175,7 +161,6 @@ export abstract class AsyncDoubleEndedIterator<T> extends AsyncIterator<T> {
         return acc as Result<B, Err>;
     }
 
-    // @ts-expect-error
     override zip<V>(other: AsyncDoubleEndedIteratorInputType<V>, callback: (value: V) => Promise<V> | V): AsyncDoubleEndedIterator<[T, V]> {
         return new Zip(this, other, callback)
     }
@@ -373,12 +358,10 @@ class Flatten<T> extends AsyncDoubleEndedIterator<T> {
     #outter: AsyncDoubleEndedIterator<AsyncDoubleEndedIterator<T>>;
     #frontiter: Option<AsyncDoubleEndedIterator<T>>;
     #backiter: Option<AsyncDoubleEndedIterator<T>>;
-    #callback: (value: T) => T | Promise<T>;
 
-    constructor(iterable: AsyncDoubleEndedIterator<AsyncDoubleEndedIterator<T>>, callback: (value: T) => T | Promise<T>) {
+    constructor(iterable: AsyncDoubleEndedIterator<AsyncDoubleEndedIterator<T>>) {
         super()
         this.#outter = iterable;
-        this.#callback = callback;
     }
 
     override into_iter(): AsyncDoubleEndedIterator<T> {
@@ -395,10 +378,10 @@ class Flatten<T> extends AsyncDoubleEndedIterator<T> {
                 return this.#backiter ? this.#backiter.next() : done()
             }
 
-            this.#frontiter = async_iter(n, this.#callback as any) as AsyncDoubleEndedIterator<T>;
+            this.#frontiter = n
         }
 
-        const n = await this.#front_loop(this.#frontiter);
+        const n = await this.#front_loop(this.#frontiter!);
 
         if (n.done) {
             if (this.#backiter) {
@@ -419,10 +402,10 @@ class Flatten<T> extends AsyncDoubleEndedIterator<T> {
             if (!n) {
                 return this.#frontiter ? this.#frontiter.next_back() : done()
             }
-            this.#backiter = async_iter(n, this.#callback as any) as AsyncDoubleEndedIterator<T>;
+            this.#backiter = n as any;
         }
 
-        const n = await this.#back_loop(this.#backiter);
+        const n = await this.#back_loop(this.#backiter!);
 
         if (n.done) {
             if (this.#frontiter) {
@@ -445,7 +428,7 @@ class Flatten<T> extends AsyncDoubleEndedIterator<T> {
                 // outter is done
                 return done();
             } else {
-                it = async_iter(outter.value, this.#callback as any) as any;
+                it = outter.value as any;
                 // just advanced outter, so return new n;
                 this.#frontiter = it;
                 return await it.next()
@@ -468,7 +451,7 @@ class Flatten<T> extends AsyncDoubleEndedIterator<T> {
                 return done();
             } else {
                 // just advanced outter, so return new n;
-                this.#backiter = async_iter(outter.value!, this.#callback as any) as any;
+                this.#backiter = outter.value as any;
                 return await this.#backiter!.next_back()
             }
 
@@ -481,9 +464,9 @@ class Flatten<T> extends AsyncDoubleEndedIterator<T> {
 class FlatMap<A, B> extends AsyncDoubleEndedIterator<B> {
     #flat: Flatten<A>
     #f: (value: A) => B;
-    constructor(it: AsyncDoubleEndedIterator<AsyncDoubleEndedIterator<A>>, f: (value: A) => B, callback: (value: B) => B | Promise<B>) {
+    constructor(it: AsyncDoubleEndedIterator<AsyncDoubleEndedIterator<A>>, f: (value: A) => B) {
         super()
-        this.#flat = new Flatten<A>(it, callback as any);
+        this.#flat = new Flatten<A>(it);
         this.#f = f;
     }
     override into_iter(): AsyncDoubleEndedIterator<B> {
@@ -1457,7 +1440,6 @@ export class AsyncArraylike<T> extends ExactSizeAsyncDoubleEndedIterator<T> {
         return is_some(item) ? iter_item(await this.#promise(item)) : done();
     }
 
-    // @ts-expect-error
     override async eq(other: ExactSizeAsyncDoubleEndedIterator<T>): Promise<boolean> {
         if (this.len() !== other.len()) {
             return false
@@ -1466,7 +1448,6 @@ export class AsyncArraylike<T> extends ExactSizeAsyncDoubleEndedIterator<T> {
         return await super.eq(other as any);
     }
 
-    // @ts-expect-error
     override async eq_by(other: ExactSizeAsyncDoubleEndedIterator<T>, eq: (a: T, b: T) => boolean): Promise<boolean> {
         if (this.len() !== other.len()) {
             return false

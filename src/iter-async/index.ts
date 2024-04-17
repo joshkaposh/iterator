@@ -1,7 +1,5 @@
 
-import { Item } from "../iter/shared";
-import type { IterInputType } from '../iter/types'
-import type { AsyncIter, AsyncIterInputType } from "./types";
+import type { IterInputType, AsyncIter, AsyncIterInputType, Item } from '../types'
 import { is_primitive, unused } from "../util"
 import { AsyncArraylike } from "./async-double-ended-iterator";
 import { AsyncGenerator, from_async_fn } from "./async-iterator";
@@ -46,7 +44,6 @@ async_iter.from_sync = function <T>(sync: IterInputType<T>) {
 
 export * from './async-iterator';
 export * from './async-double-ended-iterator';
-export * from './types';
 
 export {
     from_async_fn,

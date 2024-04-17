@@ -1,8 +1,7 @@
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
-import { ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize, MustReturn, Item, SizeHint } from "../iter/shared";
+import { ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize } from "../shared";
+import type { AsyncIteratorInputType, MustReturn, Item, SizeHint } from "../types";
 import { async_iter } from ".";
-import { unused } from "../util";
-import type { AsyncIteratorInputType } from "./types";
 
 export interface AsyncIterator<T> {
     advance_by(n: number): Promise<Result<Ok, NonZeroUsize>>
@@ -115,12 +114,12 @@ export abstract class AsyncIterator<T> {
         return new Filter(this, callback)
     }
 
-    flatten<O extends T extends Iterable<infer T2> ? T2 : never>(callback: (value: O) => O | Promise<O>): AsyncIterator<O> {
-        return new Flatten(this as any, callback)
+    flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): AsyncIterator<O> {
+        return new Flatten(this as any)
     }
 
-    flat_map<B>(f: MustReturn<(value: T) => B>, callback: (value: B) => B | Promise<B>): AsyncIterator<B> {
-        return new FlatMap(this as any, f, callback)
+    flat_map<B>(f: MustReturn<(value: T) => B>): AsyncIterator<B> {
+        return new FlatMap(this as any, f)
     }
 
     async fold<B>(initial: B, fold: (acc: B, x: T) => B) {
@@ -544,14 +543,12 @@ class FilterMap<A, B> extends AsyncIterator<B> {
 }
 
 class Flatten<T> extends AsyncIterator<T> {
-    #callback: (value: T) => T | Promise<T>
     #outter: AsyncIterator<AsyncIterator<T>>;
     #inner: Option<AsyncIterator<T>>;
 
-    constructor(iterable: AsyncIterator<AsyncIterator<T>>, callback: (value: T) => T | Promise<T>) {
+    constructor(iterable: AsyncIterator<AsyncIterator<T>>) {
         super()
         this.#outter = iterable;
-        this.#callback = callback;
     }
 
     override into_iter(): AsyncIterator<T> {
@@ -571,8 +568,8 @@ class Flatten<T> extends AsyncIterator<T> {
                 return done();
             } else {
                 // just advanced outter, so return new n;
-                this.#inner = async_iter(n2.value, this.#callback as any);
-                return this.#inner!.next()
+                this.#inner = n2.value!
+                return this.#inner.next()
             }
 
         } else {
@@ -587,7 +584,7 @@ class Flatten<T> extends AsyncIterator<T> {
             if (out.done) {
                 return done()
             }
-            const it = async_iter(out.value, this.#callback as any) as any;
+            const it = out.value!;
             this.#inner = it
         }
 
@@ -598,10 +595,10 @@ class Flatten<T> extends AsyncIterator<T> {
 class FlatMap<A, B> extends AsyncIterator<B> {
     #flat: Flatten<A>
     #f: (value: A) => B | Promise<B>;
-    constructor(it: AsyncIterator<AsyncIterator<A>>, f: (value: A) => B | Promise<B>, callback: (value: B) => B | Promise<B>) {
+
+    constructor(it: AsyncIterator<AsyncIterator<A>>, f: (value: A) => B | Promise<B>) {
         super()
-        unused(callback)
-        this.#flat = new Flatten(it, f as any);
+        this.#flat = new Flatten(it);
         this.#f = f;
     }
 

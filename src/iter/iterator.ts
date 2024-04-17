@@ -1,7 +1,7 @@
 import { iter } from ".";
 import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
-import { done, iter_item, type MustReturn, type Item, type SizeHint, type GeneratorType, NonZeroUsize, ErrorExt, non_zero_usize } from "./shared";
-import type { IteratorInputType } from './types';
+import { done, iter_item, NonZeroUsize, ErrorExt, non_zero_usize } from "../shared";
+import type { IteratorInputType, MustReturn, Item, SizeHint, GeneratorType } from '../types';
 
 export interface Iterator<T> {
     advance_by(n: number): Result<Ok, NonZeroUsize>

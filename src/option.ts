@@ -1,16 +1,14 @@
-import { ErrorExt } from "./iter/shared";
+import { ErrorExt } from "./shared";
 
 export type None = null | undefined
 export type Option<T> = T | None;
 
 export type Ok<T = undefined> = T;
-export type Err<T = any> = Error & {
-    get(): T;
-}
+export type Err<T = any> = ErrorExt<T>;
 export type Result<T, E extends Err<unknown>> = T | E
 
 export type AsOption<R extends Result<any, Err<any>>> =
-    R extends Error ? never : Option<R>
+    R extends Err ? never : Option<R>
 
 /**
 * @description
