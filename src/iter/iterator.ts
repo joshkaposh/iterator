@@ -1,7 +1,11 @@
 import { iter } from ".";
-import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
-import { done, iter_item, NonZeroUsize, ErrorExt, non_zero_usize } from "../shared";
-import type { IteratorInputType, MustReturn, Item, SizeHint, GeneratorType } from '../types';
+import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt } from "joshkaposh-option";
+import { done, iter_item, NonZeroUsize, non_zero_usize } from "../shared";
+import type { IteratorInputType, MustReturn, Item, SizeHint, GeneratorType, IterInputType } from '../types';
+
+type FlatType<T> = Iterator<Iterator<T>>;
+
+type CanGtLt<T> = T extends string ? T : T extends number ? T : never;
 
 export interface Iterator<T> {
     advance_by(n: number): Result<Ok, NonZeroUsize>
@@ -38,7 +42,9 @@ export abstract class Iterator<T> {
         return true
     }
 
-    array_chunks(n: number) {
+    array_chunks(n: number): Iterator<T[]> & {
+        into_remainder(): Option<T[]>;
+    } {
         return new ArrayChunks(this, n)
     }
 
@@ -68,29 +74,31 @@ export abstract class Iterator<T> {
         return new Cycle(this);
     }
 
-    enumerate(): Iterator<[number, T]> {
+    enumerate(): ExactSizeIterator<[number, T]> {
         return new Enumerate(this)
     }
 
-    eq(other: IterableIterator<T>) {
+    eq(other: IterInputType<T>): boolean {
+        other = iter(other)
         for (const val of other) {
             const n = this.next()
             if (n.value !== val) {
                 return false
             }
         }
-
-        return this.next().done === other.next().done
+        // @ts-expect-error
+        return this.size_hint()[1] === other.size_hint()[1]
     }
 
-    eq_by(other: IterableIterator<T>, eq: (a: T, b: T) => boolean): boolean {
+    eq_by(other: IterInputType<T>, eq: (a: T, b: T) => boolean): boolean {
+        other = iter(other);
         for (const val of other) {
             const n = this.next()
             if (!eq(n.value, val)) {
                 return false
             }
         }
-
+        // @ts-expect-error;
         return this.next().done === other.next().done
     }
 
@@ -101,20 +109,30 @@ export abstract class Iterator<T> {
     filter_map<B>(callback: MustReturn<(value: T) => Option<B>>): Iterator<B> {
         return new FilterMap(this, callback)
     }
-
-    flatten<O extends T extends Iterable<infer T2> ? T2 : never>(): Iterator<O> {
-        return new Flatten(this as unknown as Iterator<Iterator<O>>)
+    /**
+     * 
+     * @description
+     * Creates an `Iterator` that flattens nested structures.
+     * 
+     * `flatten` is useful when wanting to remove one layer of indirection.
+     * @throws `flatten` **throws** when calling next() or any methods tbat use it if the elements of the interator it is trying to flatten from cannot be converted into an `Iterator`
+     * @example
+     * iter(1).flatten().next() // Errors
+     * iter([ [1, 2, 3], [4, 5, 6] ]).flatten().rev().collect() // [6, 5, 4, 3, 2, 1];
+    */
+    flatten(): Iterator<T> {
+        return new Flatten(this as unknown as Iterator<Iterator<T>>)
     }
-
     /**
      * @description
-     * Flattens and then maps values A -> B.
+     * `flat_map` takes in a closure that takes in one argument `A` and returns an `Option<Iterator<B>>`.
+     * It then yields elements from that iterator. Iteration ends when the closure returns `None`
      * 
-     * flat_map() is a shorthand for Iterator.flatten().map()
+     * `flat_map` is a shorthand for `Iterator.map().flatten()`
      * 
-     * See Iterator.flatten() and Iterator.map() for more information.
+     * @see `Iterator.flatten` and `Iterator.map` for more information.
      */
-    flat_map<B>(f: MustReturn<(value: T) => B>): Iterator<B> {
+    flat_map<B extends Iterator<any>>(f: (value: T) => Option<B>): Iterator<Item<B>> {
         return new FlatMap(this as any, f)
     }
 
@@ -242,33 +260,36 @@ export abstract class Iterator<T> {
         return new MapWhile(this, f)
     }
 
-
     //! Caller must ensure T = number
-    max<M extends T extends string | number ? T : never>(): Option<M> {
+    max(): Option<CanGtLt<T>> {
         const n = this.next();
         if (n.done) {
             return
         } else {
-            if (typeof n.value === 'number') {
-                return Math.max(n.value, ...this as any) as M;
-            } else {
-                // @ts-expect-error
-                return this.fold(n.value, (acc, x) => (acc > x ? acc : x))
+            const ty = typeof n.value;
+            if (ty === 'number') {
+                return Math.max(n.value as number, ...this as unknown as Iterator<number>) as CanGtLt<T>;
+            } else if (ty === 'string') {
+                return this.fold(n.value as CanGtLt<T>, (acc, x) => (acc > x as unknown as CanGtLt<T> ? acc : x as CanGtLt<T>)) as CanGtLt<T>
             }
+
+            throw new Error(`Cannot call 'max' on an Iterator of type ${ty}. Accepted element types are 'string' or 'number'`)
         }
     }
     //! Caller must ensure T = number
-    min<M extends T extends string | number ? T : never>(): Option<M> {
+    min(): Option<CanGtLt<T>> {
         const n = this.next();
         if (n.done) {
-            return
+            return;
         } else {
-            if (typeof n.value === 'number') {
-                return Math.min(n.value, ...this as any) as M;
-            } else {
-                // @ts-expect-error
-                return this.fold(n.value, (acc, x) => (acc > x ? acc : x))
+            const ty = typeof n.value;
+            if (ty === 'number') {
+                return Math.min(n.value as number, ...this as Iterator<number>) as CanGtLt<T>;
+            } else if (ty === 'string') {
+                return this.fold(n.value as CanGtLt<T>, (acc, x) => (acc > x as unknown as CanGtLt<T> ? acc : x as CanGtLt<T>))
             }
+
+            throw new Error(`Cannot call 'max' on an Iterator of type ${ty}. Accepted element types are 'string' or 'number'`)
         }
     }
 
@@ -322,7 +343,7 @@ export abstract class Iterator<T> {
         return new SkipWhile(this, predicate);
     }
 
-    step_by(n: number): Iterator<T> {
+    step_by(n: number): ExactSizeIterator<T> {
         return new StepBy(this, n);
     }
 
@@ -379,7 +400,6 @@ export interface ExactSizeIterator<T> {
     size_hint(): SizeHint<number, number>;
     into_iter(): ExactSizeIterator<T>;
 }
-
 export abstract class ExactSizeIterator<T> extends Iterator<T> {
     len(): number {
         return this.size_hint()[1]
@@ -427,7 +447,7 @@ class ArrayChunks<T> extends Iterator<T[]> {
         this.#n = n;
     }
 
-    into_remainder() {
+    into_remainder(): Option<T[]> {
         return this.#remainder;
     }
 
@@ -458,7 +478,7 @@ class Chain<T1, T2> extends Iterator<T1 | T2> {
     constructor(iterable: Iterator<T1>, other: Iterator<T2>) {
         super()
         this.#iter = iterable;
-        this.#other = iter(other) as any;
+        this.#other = iter(other) as Iterator<T2>;
     }
 
     override into_iter(): Iterator<T1 | T2> {
@@ -497,7 +517,7 @@ class Cycle<T> extends Iterator<T> {
 
 }
 
-class Enumerate<T> extends Iterator<[number, T]> {
+class Enumerate<T> extends ExactSizeIterator<[number, T]> {
     #index = -1;
     #iter: Iterator<T>;
     constructor(iterable: Iterator<T>) {
@@ -505,7 +525,7 @@ class Enumerate<T> extends Iterator<[number, T]> {
         this.#iter = iterable;
     }
 
-    override into_iter(): Iterator<[number, T]> {
+    override into_iter(): ExactSizeIterator<[number, T]> {
         this.#iter.into_iter();
         this.#index = -1;
         return this
@@ -576,9 +596,9 @@ class FilterMap<A, B> extends Iterator<B> {
 }
 
 class Flatten<T> extends Iterator<T> {
-    #outter: Iterator<Iterator<T>>;
+    #outter: FlatType<T>;
     #inner: Option<Iterator<T>>;
-    constructor(iterable: Iterator<Iterator<T>>) {
+    constructor(iterable: FlatType<T>) {
         super()
         this.#outter = iterable;
     }
@@ -601,7 +621,7 @@ class Flatten<T> extends Iterator<T> {
                 return done();
             } else {
                 // just advanced outter, so return new n;
-                this.#inner = iter(n2.value) as any;
+                this.#inner = iter(n2.value);
                 return this.#inner!.next()
             }
 
@@ -623,27 +643,49 @@ class Flatten<T> extends Iterator<T> {
     }
 }
 
-class FlatMap<A, B> extends Iterator<B> {
-    #flat: Flatten<A>
-    #f: (value: A) => B;
-    constructor(it: Iterator<Iterator<A>>, f: (value: A) => B) {
+class FlatMap<A, B extends Iterator<any>> extends Iterator<Item<B>> {
+    #inner: Option<B>;
+    #iter: Iterator<A>;
+    #fn: (value: A) => Option<B>
+    constructor(it: Iterator<A>, f: (value: A) => Option<B>) {
         super()
-        this.#flat = new Flatten(it);
-        this.#f = f;
+        this.#iter = it;
+        this.#fn = f;
     }
 
-
-    override next(): IteratorResult<B> {
-        const n = this.#flat.next();
+    #next_loop() {
+        // ! Safety: next() just initialized inner;
+        const n = this.#inner!.next();
         if (n.done) {
-            return done();
+            this.#inner = null;
+            return this.next();
         }
 
-        return n.done ? done() : iter_item(this.#f(n.value))
+        return n;
     }
 
-    override into_iter(): Iterator<B> {
-        this.#flat.into_iter();
+    override next(): IteratorResult<Item<B>> {
+        if (!this.#inner) {
+            // check outter
+            const n = this.#iter.next();
+            if (n.done) {
+                return done()
+            };
+
+            const inner = this.#fn(n.value);
+            if (!is_some(inner)) {
+                return done();
+            }
+
+            this.#inner = iter(inner) as any;
+        }
+
+        return this.#next_loop();
+    }
+
+    override into_iter(): Iterator<Item<B>> {
+        this.#iter.into_iter();
+        this.#inner = null;
         return this
     }
 }
@@ -822,7 +864,7 @@ class MapWhile<A, B> extends Iterator<B> {
     }
 }
 
-class Skip<T> extends Iterator<T> {
+class Skip<T> extends ExactSizeIterator<T> {
     #n: number;
     #iter: Iterator<T>
     constructor(iterable: Iterator<T>, n: number) {
@@ -835,7 +877,7 @@ class Skip<T> extends Iterator<T> {
         return this.#iter.size_hint() as SizeHint<number, number>
     }
 
-    override into_iter(): Iterator<T> {
+    override into_iter(): ExactSizeIterator<T> {
         this.#iter.into_iter();
         return this
     }
@@ -960,7 +1002,7 @@ class SkipWhile<T> extends Iterator<T> {
     }
 }
 
-class StepBy<T> extends Iterator<T> {
+class StepBy<T> extends ExactSizeIterator<T> {
     #iter: Iterator<T>;
     #step: number;
     #first_take: boolean;
@@ -971,7 +1013,7 @@ class StepBy<T> extends Iterator<T> {
         this.#first_take = true;
     }
 
-    override into_iter(): Iterator<T> {
+    override into_iter(): ExactSizeIterator<T> {
         this.#iter.into_iter();
         return this
     }
@@ -982,7 +1024,7 @@ class StepBy<T> extends Iterator<T> {
         return this.#iter.nth(step_size);
     }
 
-    override size_hint(): [number, Option<number>] {
+    override size_hint(): [number, number] {
         function first_size(step: number) {
             return (n: number) => n === 0 ? 0 : Math.floor(1 + (n - 1) / (step + 1));
         }
@@ -995,7 +1037,7 @@ class StepBy<T> extends Iterator<T> {
 
         const f = this.#first_take ? first_size(this.#step) : other_size(this.#step);
 
-        return [f(low), is_some(high) ? f(high) : null]
+        return [f(low), is_some(high) ? f(high) : 0]
     }
 
     override nth(n: number): IteratorResult<T> {
@@ -1274,7 +1316,7 @@ class Zip<K, V> extends Iterator<[K, V]> {
     constructor(iterable: Iterator<K>, other: IteratorInputType<V>) {
         super()
         this.#iter = iterable;
-        this.#other = iter(other) as any
+        this.#other = iter(other) as Iterator<V>;
     }
 
     override into_iter(): Iterator<[K, V]> {

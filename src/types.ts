@@ -2,7 +2,7 @@ import { DoubleEndedIterator, ExactSizeDoubleEndedIterator } from "./iter/double
 import { ExactSizeIterator, Iterator } from "./iter/iterator";
 import { AsyncDoubleEndedIterator, ExactSizeAsyncDoubleEndedIterator } from "./iter-async/async-double-ended-iterator";
 import { AsyncIterator, ExactSizeAsyncIterator } from "./iter-async/async-iterator";
-import type { Option } from "./option";
+import type { Option } from "joshkaposh-option";
 
 export type ArrayLikeType<T> = ArrayLike<T>;
 export type GeneratorType<T> = Generator<T>;
@@ -13,7 +13,6 @@ export type SizeHint<Lo = number, Hi = Option<number>> = [Lo, Hi];
 
 export type MustReturn<F extends (...args: any[]) => any> = ReturnType<F> extends void ? never : F;
 export type Primitive = string | number | bigint | boolean | undefined | null | symbol;
-
 
 export type HasSymbolIterator<It, T = keyof It> = (T extends SymbolConstructor['iterator'] ? T : never) extends never ? 0 : 1;
 
@@ -31,7 +30,6 @@ export type Iter<It> =
     It extends IteratorInputType<infer T> ?
     It extends ExactSizeIterator<T> ? ExactSizeIterator<T> : Iterator<T>
     : never;
-
 
 export type HasSymbolAsyncIterator<It, T = keyof It> = (T extends SymbolConstructor['asyncIterator'] ? T : never) extends never ? 0 : 1;
 

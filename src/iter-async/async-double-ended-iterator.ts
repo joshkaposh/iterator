@@ -1,7 +1,7 @@
-import { type Err, type Ok, type Option, type Result, is_error, is_some } from "../option";
+import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt, } from "joshkaposh-option";
 import { assert } from "../util";
 import { AsyncIterator } from "./async-iterator";
-import { ErrorExt, NonZeroUsize, done, iter_item, non_zero_usize } from "../shared";
+import { NonZeroUsize, done, iter_item, non_zero_usize } from "../shared";
 import { async_iter, from_async_fn } from ".";
 import type { AsyncDoubleEndedIteratorInputType, SizeHint, Item, MustReturn } from "../types";
 

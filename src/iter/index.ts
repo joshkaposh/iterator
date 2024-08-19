@@ -1,23 +1,8 @@
-import { AsyncIterator } from "../iter-async";
 import { is_arraylike, is_primitive } from "../util";
 import { ArrayLike } from "./double-ended-iterator";
-import { Generator, Iterator } from "./iterator";
+import { Generator } from "./iterator";
 import type { IterInputType, Iter } from '../types'
-
-export function iter_type<It extends IterInputType<any>>(iterable: It) {
-    if (iterable instanceof Iterator || iterable instanceof AsyncIterator) {
-        return 'iter'
-    } else if (is_arraylike(iterable)) {
-        return 'arraylike'
-        // @ts-expect-error
-    } else if (iterable && (iterable[Symbol.iterator] || iterable[Symbol.asyncIterator])) {
-        return 'iterable'
-    } else if (typeof iterable === 'function') {
-        return 'function'
-    } else {
-        return 'invalid'
-    }
-}
+import { iter_type } from "../shared";
 
 export function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
     const ty = iter_type(iterable);

@@ -20,7 +20,7 @@ export function fill_with<T>(len: number, fn: (index: number) => T) {
     return Array.from({ length: len }, (_, i) => fn(i))
 }
 
-export function fill_string<T extends string>(string: T, len: number): `${T}-${number}`[] {
+export function fill_str<T extends string>(string: T, len: number): `${T}-${number}`[] {
     const arr: `${T}-${number}`[] = []
     for (let i = 0; i < len; i++) {
         arr.push(`${string}${i + 1}` as `${T}-${number}`);
@@ -39,6 +39,15 @@ export function* count(n: number, from_zero = false) {
         yield i
     }
 }
+
+export function* count_str<T extends string>(str: T, len: number) {
+    let i = 0;
+    while (i < len) {
+        i++;
+        yield `${str}-${i}`
+    }
+}
+
 
 export function* toInfinityAndBeyond(from_zero = false) {
     let x = from_zero ? -1 : 0;

@@ -3,7 +3,7 @@ import type { IterInputType, AsyncIter, AsyncIterInputType, Item } from '../type
 import { is_primitive, unused } from "../util"
 import { AsyncArraylike } from "./async-double-ended-iterator";
 import { AsyncGenerator, from_async_fn } from "./async-iterator";
-import { iter_type } from "../iter";
+import { iter_type } from "../shared";
 
 // callback is a sync or async fn that can peek at value before returning it or another value of the same type
 export function async_iter<It extends AsyncIterInputType<any>>(iterable: It, callback: (value: Item<It>) => Promise<Item<It>> | Item<It>): AsyncIter<It> {

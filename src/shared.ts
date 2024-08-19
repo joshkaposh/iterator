@@ -1,4 +1,7 @@
-import { Ok, is_error, type AsOption, type Err, type Result } from "./option";
+import { Iterator, is_arraylike } from "./iter";
+import { AsyncIterator } from "./iter-async";
+import { Ok, type Result, ErrorExt } from "joshkaposh-option";
+import { IterInputType } from "./types";
 
 export function done<TReturn>(): IteratorResult<TReturn> {
     return {
@@ -14,22 +17,18 @@ export function iter_item<T>(value: T): IteratorYieldResult<T> {
     }
 }
 
-export class ErrorExt<T = any> extends Error implements Err {
-    #err_data: T;
-    static opt<R extends Result<unknown, ErrorExt>>(result: R): AsOption<R> {
-        if (is_error(result)) {
-            return result.get()
-        }
-        return result as AsOption<R>;
-
-    }
-    constructor(err_data: T, msg?: string, options?: ErrorOptions) {
-        super(msg, options)
-        this.#err_data = err_data;
-        this.name = 'ErrorExt';
-    }
-    get() {
-        return this.#err_data
+export function iter_type<It extends IterInputType<any>>(iterable: It) {
+    if (iterable instanceof Iterator || iterable instanceof AsyncIterator) {
+        return 'iter'
+    } else if (is_arraylike(iterable)) {
+        return 'arraylike'
+        // @ts-expect-error
+    } else if (iterable && (iterable[Symbol.iterator] || iterable[Symbol.asyncIterator])) {
+        return 'iterable'
+    } else if (typeof iterable === 'function') {
+        return 'function'
+    } else {
+        return 'invalid'
     }
 }
 

@@ -1,5 +1,5 @@
-import type { Primitive } from "./iter/shared";
-import { type None, type Option, is_none, is_some } from "./option";
+import { type None, type Option, is_none, is_some } from "joshkaposh-option";
+import type { Primitive } from "./types";
 
 export type Prettify<T> = { [K in keyof T]: T[K] } & {}
 
@@ -63,7 +63,7 @@ export function TODO<T>(msg?: string, ...unused_vars: any[]): T {
     throw new Error(`Not implemented: ${msg}`)
 }
 
-// TODO - move these into ecs
+// TODO - move these into 'StringIterator'
 export function split_first<T>(array: T[]): Option<[T, T[]]> {
     if (array.length > 0) {
         return [array[0], array.slice(1, array.length)]

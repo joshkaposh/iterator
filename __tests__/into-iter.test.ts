@@ -5,40 +5,6 @@ function fill(len: number, from_zero = false) {
     return Array.from({ length: len }, (_, i) => from_zero ? i : i + 1)
 }
 
-function fill_string<T extends string>(string: T, len: number): `${T}-${number}`[] {
-    const arr: `${T}-${number}`[] = []
-    for (let i = 0; i < len; i++) {
-        arr.push(`${string}${i + 1}` as `${T}-${number}`);
-    }
-    return arr;
-}
-
-function* count(n: number, from_zero = false) {
-    let i = from_zero ? -1 : 0;
-    function lt(index: number) {
-        return !from_zero ? index < n : index < n - 1;
-    }
-
-    while (lt(i)) {
-        i++
-        yield i
-    }
-}
-
-function* toInfinityAndBeyond(from_zero = false) {
-    let x = from_zero ? -1 : 0;
-    while (true) {
-        x++;
-        yield x;
-    }
-}
-
-
-function into_iter_gen(it: Iterator<any>, actual: any[]) {
-    expect(it.collect()).toEqual(actual);
-    expect(it.into_iter().collect()).toEqual(actual);
-}
-
 function into_iter_array(it: DoubleEndedIterator<any>, actual: any[]) {
     expect(it.rev().collect()).toEqual(actual);
     expect(it.rev().into_iter().collect()).toEqual(actual);
@@ -84,11 +50,4 @@ test('IntoIter_DoubleEndedIterator', () => {
     const chain = iter(fill(3)).chain(iter([4, 5, 6]))
     into_iter_array(chain, [6, 5, 4, 3, 2, 1])
 
-    const take2 = iter(fill(1_000_000)).take(5);
-    const cycle_take = iter(fill(1_000_000)).cycle().take(5);
-
-    console.log(take2.next_back());
-    // ! take2 next_back should equal cycle_take next_back
-
-    // console.log(cycle_take.next_back());
 })

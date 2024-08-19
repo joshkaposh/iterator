@@ -1,6 +1,7 @@
 import { assert, expect, test } from 'vitest'
-import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with, ErrorExt } from "../src";
-import { count, expect_error, fill, fill_string, fill_with, toInfinityAndBeyond } from './helpers';
+import { ErrorExt } from 'joshkaposh-option'
+import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with } from "../src";
+import { count, count_str, expect_error, fill, fill_str, fill_with, toInfinityAndBeyond } from './helpers';
 import { type IteratorInputType } from '../src/types';
 
 test('valid iter arguments', () => {
@@ -184,13 +185,14 @@ test('flatten', () => {
     const rev = structuredClone(expected).reverse()
 
     const long = Array.from({ length: 10 }, (_) => Array.from({ length: 10 }, (_, i) => i + 1))
-
     const expected_long = new Array(100);
     for (let i = 0; i < 10; i++) {
         for (let x = 0; x < 10; x++) {
             expected_long[i * 10 + x] = x + 1
         }
     }
+
+    const cannot = [1, 2, 3, 4];
 
     assert(iter(none).count() === 0)
     assert(iter(empty).flatten().rev().count() === 0)
@@ -239,6 +241,25 @@ test('flatten', () => {
 
     expect(flat_long.into_iter().collect()).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1])
 
+})
+
+test('flat_map', () => {
+    let it = iter(() => count(100000)).flat_map(n => n > 3 ? null : iter(() => count_str('str', n)));
+
+    expect(it.collect()).toEqual([
+        'str-1',
+
+        'str-1',
+        'str-2',
+
+        'str-1',
+        'str-2',
+        'str-3',
+    ])
+
+    it = iter(fill(1000))
+        .take(5)
+        .flat_map(n => n > 3 ? null : iter(fill_str('str', n)))
 })
 
 test('native_data_structures', () => {
@@ -393,6 +414,13 @@ test('array_chunks', () => {
     expect(it.next().value).toEqual([31, 32, 33, 34, 35, 36, 37, 38, 39, 40])
     assert(it.next().done)
     expect(it.into_remainder()).toEqual([41, 42, 43, 44, 45])
+})
+
+test('eq', () => {
+    assert(iter([1, 2, 3]).eq([1, 2, 3]))
+
+    assert(iter([1, 2, 3]).eq([1, 2, 3]))
+
 })
 
 test('intersperse / intersperse_with', () => {
@@ -619,7 +647,7 @@ test('zip', () => {
         iter(fill(3))
             .map(v => v * v)
             .map(v => v * v)
-            .zip(iter(fill_string('v', 3)))
+            .zip(iter(fill_str('v', 3)))
             .enumerate()
             .last()
     ).toEqual([2, [81, 'v3']])
@@ -628,8 +656,8 @@ test('zip', () => {
         iter(fill(3))
             .map(v => v * v)
             .map(v => v * v)
-            .zip(iter(fill_string('v', 3)))
-            .zip(iter(fill_string('k', 3)))
+            .zip(iter(fill_str('v', 3)))
+            .zip(iter(fill_str('k', 3)))
             .last()
     ).toEqual([
         [81, 'v3'], 'k3'
@@ -639,8 +667,8 @@ test('zip', () => {
         iter(fill(3))
             .map(v => v * v)
             .map(v => v * v)
-            .zip(iter(fill_string('v', 3)))
-            .zip(iter(fill_string('k', 3)))
+            .zip(iter(fill_str('v', 3)))
+            .zip(iter(fill_str('k', 3)))
             .enumerate()
             .last()
     ).toEqual([2, [[81, 'v3'], 'k3']])

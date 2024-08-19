@@ -1,5 +1,6 @@
 import { test, expect, assert } from 'vitest';
-import { AsyncDoubleEndedIterator, AsyncIterator, async_iter, from_async_fn, from_iterable, is_error } from '../src/index';
+import { is_error } from 'joshkaposh-option'
+import { AsyncDoubleEndedIterator, AsyncIterator, async_iter, from_async_fn, from_iterable } from '../src/index';
 // KISS
 async function cb<T>(v: T) { return v }
 
