@@ -1,6 +1,6 @@
 {
     "name": "joshkaposh-iterator",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "description": "An iterator library inspired by Rust.",
     "main": "src/index.ts",
     "type": "module",
