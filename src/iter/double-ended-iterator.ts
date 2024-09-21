@@ -1,6 +1,6 @@
 import { assert } from "../util";
 import { Option, Err, Result, Ok, is_error, is_some, ErrorExt } from "joshkaposh-option";
-import { Iterator, from_fn } from './iterator'
+import { Iterator, filter_map_next, from_fn } from './iterator'
 import type { DoubleEndedIteratorInputType, Item, MustReturn, SizeHint, ArrayLikeType } from '../types'
 import { done, iter_item, NonZeroUsize, non_zero_usize } from "../shared";
 import { iter } from ".";
@@ -340,6 +340,17 @@ class Filter<T> extends DoubleEndedIterator<T> {
     }
 }
 
+function filter_map_next_back<A, B>(it: DoubleEndedIterator<A>, fn: (value: A) => Option<B>): IteratorResult<B> {
+    let n;
+    while (!(n = it.next_back()).done) {
+        const elt = fn(n.value);
+        if (is_some(elt)) {
+            return { done: false, value: elt }
+        }
+    }
+    return done()
+}
+
 class FilterMap<A, B> extends DoubleEndedIterator<B> {
     #iter: DoubleEndedIterator<A>;
     #fn: (value: A) => Option<B>;
@@ -356,25 +367,11 @@ class FilterMap<A, B> extends DoubleEndedIterator<B> {
     }
 
     override next(): IteratorResult<B> {
-        let n;
-        while (!(n = this.#iter.next()).done) {
-            const elt = this.#fn(n.value);
-            if (is_some(elt)) {
-                return iter_item(elt);
-            }
-        }
-        return done()
+        return filter_map_next(this.#iter, this.#fn) as IteratorResult<B>
     }
 
     override next_back(): IteratorResult<B> {
-        let n;
-        while (!(n = this.#iter.next_back()).done) {
-            const elt = this.#fn(n.value);
-            if (is_some(elt)) {
-                return iter_item(elt);
-            }
-        }
-        return done()
+        return filter_map_next_back(this.#iter, this.#fn) as IteratorResult<B>
     }
 }
 
@@ -482,7 +479,6 @@ class Flatten<T> extends DoubleEndedIterator<T> {
         }
     }
 }
-// type FlatMapItem<T> = Item<Iter<T>>;
 
 class FlatMap<A, B extends DoubleEndedIterator<any>> extends DoubleEndedIterator<Item<B>> {
     #inner: Option<B>;

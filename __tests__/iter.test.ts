@@ -1,5 +1,5 @@
 import { assert, expect, test } from 'vitest'
-import { ErrorExt } from 'joshkaposh-option'
+import { ErrorExt, Option } from 'joshkaposh-option'
 import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with } from "../src";
 import { count, count_str, expect_error, fill, fill_str, fill_with, toInfinityAndBeyond } from './helpers';
 import { type IteratorInputType } from '../src/types';
@@ -129,6 +129,19 @@ test('partition', () => {
     expect(iter(arr).partition((v) => v % 2 === 0)).toEqual([[2, 4], [1, 3]])
     expect(iter(arr).rev().partition((v) => v % 2 === 0)).toEqual([[4, 2], [3, 1]])
 
+})
+
+function parse_int(str: string): Option<number> {
+    const n = parseInt(str);
+    return !Number.isNaN(n) ? n : undefined;
+}
+
+test('find_map', () => {
+    const base = ["lol", 'abc', '2', '3'];
+    assert(
+        iter(base).filter_map(parse_int).next().value
+        === iter(base).find_map(parse_int)
+    )
 })
 
 test("miscellaneous", () => {

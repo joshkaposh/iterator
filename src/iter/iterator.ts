@@ -1,4 +1,4 @@
-import { iter } from ".";
+import { DoubleEndedIterator, iter } from ".";
 import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt } from "joshkaposh-option";
 import { done, iter_item, NonZeroUsize, non_zero_usize } from "../shared";
 import type { IteratorInputType, MustReturn, Item, SizeHint, GeneratorType, IterInputType } from '../types';
@@ -109,6 +109,11 @@ export abstract class Iterator<T> {
     filter_map<B>(callback: MustReturn<(value: T) => Option<B>>): Iterator<B> {
         return new FilterMap(this, callback)
     }
+
+    find_map<B>(callback: MustReturn<(value: T) => Option<B>>): Option<B> {
+        return filter_map_next(this, callback).value;
+    }
+
     /**
      * 
      * @description
@@ -468,7 +473,7 @@ class ArrayChunks<T> extends Iterator<T[]> {
             return done();
         }
 
-        return iter_item(chunk)
+        return { done: false, value: chunk }
     }
 }
 
@@ -531,10 +536,10 @@ class Enumerate<T> extends ExactSizeIterator<[number, T]> {
         return this
     }
 
-    next() {
+    next(): IteratorResult<[number, T]> {
         this.#index++;
         const n = this.#iter.next();
-        return !n.done ? iter_item([this.#index, n.value] as [number, T]) : done<[number, T]>()
+        return !n.done ? { done: false, value: [this.#index, n.value] } : done()
     }
 }
 
@@ -567,6 +572,17 @@ class Filter<T> extends Iterator<T> {
     }
 }
 
+export function filter_map_next<A, B>(it: Iterator<A>, fn: (value: A) => Option<B>) {
+    let n;
+    while (!(n = it.next()).done) {
+        const elt = fn(n.value);
+        if (is_some(elt)) {
+            return { done: false, value: elt }
+        }
+    }
+    return done()
+}
+
 class FilterMap<A, B> extends Iterator<B> {
 
     #iter: Iterator<A>;
@@ -584,14 +600,7 @@ class FilterMap<A, B> extends Iterator<B> {
     }
 
     override next(): IteratorResult<B> {
-        let n;
-        while (!(n = this.#iter.next()).done) {
-            const elt = this.#fn(n.value);
-            if (is_some(elt)) {
-                return iter_item(elt);
-            }
-        }
-        return done()
+        return filter_map_next(this.#iter, this.#fn) as IteratorResult<B>;
     }
 }
 
@@ -770,7 +779,7 @@ class Intersperse<T> extends Iterator<T> {
     override next(): IteratorResult<T> {
         if (this.#needs_sep && !this.#iter.peek().done) {
             this.#needs_sep = false;
-            return iter_item(this.#separator)
+            return { done: false, value: this.#separator }
         } else {
             this.#needs_sep = true;
             return this.#iter.next();
@@ -806,7 +815,7 @@ class IntersperseWith<T> extends Iterator<T> {
     override next(): IteratorResult<T> {
         if (this.#needs_sep && !this.#iter.peek().done) {
             this.#needs_sep = false;
-            return iter_item(this.#gen())
+            return { done: false, value: this.#gen() }
         } else {
             this.#needs_sep = true;
             return this.#iter.next();
@@ -834,9 +843,9 @@ class Map<A, B> extends Iterator<B> {
         return this
     }
 
-    next() {
+    next(): IteratorResult<B> {
         const n = this.#iter.next();
-        return !n.done ? iter_item(this.#callback(n.value)) : done<B>();
+        return !n.done ? { done: false, value: this.#callback(n.value) } : done();
     }
 }
 
@@ -860,7 +869,7 @@ class MapWhile<A, B> extends Iterator<B> {
             return done();
         }
         const v = this.#fn(n.value);
-        return is_some(v) ? iter_item(v) : done();
+        return is_some(v) ? { done: false, value: v } : done();
     }
 }
 
@@ -1330,7 +1339,7 @@ class Zip<K, V> extends Iterator<[K, V]> {
         const k = this.#iter.next()
         const v = this.#other.next()
 
-        return (k.done || v.done) ? done() : iter_item([k.value, v.value] as [K, V])
+        return (k.done || v.done) ? done() : { done: false, value: [k.value, v.value] as [K, V] }
     }
 }
 
@@ -1371,7 +1380,7 @@ class FromFn<T> extends Iterator<T> {
 
     override next(): IteratorResult<T> {
         const n = this.#fn();
-        return is_some(n) ? iter_item(n) : done();
+        return is_some(n) ? { done: false, value: n } : done();
     }
 }
 
@@ -1418,7 +1427,7 @@ class Successors<T> extends Iterator<T> {
         }
         const n = this.#succ(item);
         this.#next = n;
-        return iter_item(item)
+        return { done: false, value: item }
     }
 
     override size_hint(): [number, Option<number>] {
