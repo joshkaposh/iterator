@@ -94,6 +94,10 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return null;
     }
 
+    rfind_map<B>(callback: MustReturn<(value: T) => Option<B>>) {
+        return filter_map_next_back(this, callback).value
+    }
+
     /**
      * @description
      * rfold() takes two arguments, an initial B and a folder (acc: B, element: T) => B.

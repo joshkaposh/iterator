@@ -1,11 +1,14 @@
-import { DoubleEndedIterator, iter } from ".";
+import { iter } from ".";
 import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt } from "joshkaposh-option";
-import { done, iter_item, NonZeroUsize, non_zero_usize } from "../shared";
+import { done, NonZeroUsize, non_zero_usize } from "../shared";
 import type { IteratorInputType, MustReturn, Item, SizeHint, GeneratorType, IterInputType } from '../types';
 
 type FlatType<T> = Iterator<Iterator<T>>;
 
-type CanGtLt<T> = T extends string ? T : T extends number ? T : never;
+type CanGtLt<T> = T extends string ? T :
+    T extends number ? T :
+    T extends { [Symbol.toPrimitive](): Option<string | number | boolean> } ? T :
+    never;
 
 export interface Iterator<T> {
     advance_by(n: number): Result<Ok, NonZeroUsize>
