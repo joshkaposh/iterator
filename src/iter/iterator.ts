@@ -1,4 +1,4 @@
-import { iter } from ".";
+import { iter, map_next } from ".";
 import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt } from "joshkaposh-option";
 import { done, NonZeroUsize, non_zero_usize } from "../shared";
 import type { IteratorInputType, MustReturn, Item, SizeHint, GeneratorType, IterInputType } from '../types';
@@ -114,7 +114,14 @@ export abstract class Iterator<T> {
     }
 
     find_map<B>(callback: MustReturn<(value: T) => Option<B>>): Option<B> {
-        return filter_map_next(this, callback).value;
+        let n;
+        while (!(n = this.next()).done) {
+            const elt = callback(n.value);
+            if (is_some(elt)) {
+                return elt
+            }
+        }
+        return
     }
 
     /**
@@ -480,22 +487,22 @@ class ArrayChunks<T> extends Iterator<T[]> {
     }
 }
 
-class Chain<T1, T2> extends Iterator<T1 | T2> {
-    #iter: Iterator<T1>
-    #other: Iterator<T2>
-    constructor(iterable: Iterator<T1>, other: Iterator<T2>) {
+class Chain<T> extends Iterator<T> {
+    #iter: Iterator<T>
+    #other: Iterator<T>
+    constructor(iterable: Iterator<T>, other: Iterator<T>) {
         super()
         this.#iter = iterable;
-        this.#other = iter(other) as Iterator<T2>;
+        this.#other = iter(other) as Iterator<T>;
     }
 
-    override into_iter(): Iterator<T1 | T2> {
+    override into_iter(): Iterator<T> {
         this.#iter.into_iter();
         this.#other.into_iter();
         return this
     }
 
-    override next(): IteratorResult<T1 | T2> {
+    override next(): IteratorResult<T> {
         const n = this.#iter.next();
         return !n.done ? n : this.#other.next();
     }
@@ -519,7 +526,7 @@ class Cycle<T> extends Iterator<T> {
             return n;
         }
 
-        this.into_iter();
+        this.#iter.into_iter();
         return this.#iter.next();
     }
 
@@ -541,18 +548,17 @@ class Enumerate<T> extends ExactSizeIterator<[number, T]> {
 
     next(): IteratorResult<[number, T]> {
         this.#index++;
-        const n = this.#iter.next();
-        return !n.done ? { done: false, value: [this.#index, n.value] } : done()
+        return map_next(this.#iter.next(), v => [this.#index, v])
     }
 }
 
 class Filter<T> extends Iterator<T> {
-    #callback: (value: T) => boolean;
+    #predicate: (value: T) => boolean;
     #iter: Iterator<T>;
-    constructor(iterable: Iterator<T>, callback: (value: T) => boolean) {
+    constructor(iterable: Iterator<T>, predicate: (value: T) => boolean) {
         super()
         this.#iter = iterable;
-        this.#callback = callback;
+        this.#predicate = predicate;
     }
 
     override into_iter(): Iterator<T> {
@@ -567,7 +573,7 @@ class Filter<T> extends Iterator<T> {
                 return done()
             }
 
-            if (this.#callback(n.value)) {
+            if (this.#predicate(n.value)) {
                 return n
             }
         }
@@ -575,19 +581,7 @@ class Filter<T> extends Iterator<T> {
     }
 }
 
-export function filter_map_next<A, B>(it: Iterator<A>, fn: (value: A) => Option<B>) {
-    let n;
-    while (!(n = it.next()).done) {
-        const elt = fn(n.value);
-        if (is_some(elt)) {
-            return { done: false, value: elt }
-        }
-    }
-    return done()
-}
-
 class FilterMap<A, B> extends Iterator<B> {
-
     #iter: Iterator<A>;
     #fn: (value: A) => Option<B>;
 
@@ -603,7 +597,15 @@ class FilterMap<A, B> extends Iterator<B> {
     }
 
     override next(): IteratorResult<B> {
-        return filter_map_next(this.#iter, this.#fn) as IteratorResult<B>;
+        let n;
+        while (!(n = this.#iter.next()).done) {
+            const elt = this.#fn(n.value);
+            if (is_some(elt)) {
+                return { done: false, value: elt }
+            }
+        }
+        return done()
+
     }
 }
 
@@ -710,8 +712,6 @@ class Inspect<T> extends Iterator<T> {
         this.#iter = iterable;
         this.#callback = callback;
     }
-
-
 
     override into_iter(): Iterator<T> {
         this.#iter.into_iter();
@@ -831,15 +831,13 @@ class IntersperseWith<T> extends Iterator<T> {
 }
 
 class Map<A, B> extends Iterator<B> {
-    #callback: MustReturn<(value: A) => B>;
+    #map: MustReturn<(value: A) => B>;
     #iter: Iterator<A>;
-    constructor(iterable: Iterator<A>, callback: MustReturn<(value: A) => B>) {
+    constructor(iterable: Iterator<A>, map: MustReturn<(value: A) => B>) {
         super()
         this.#iter = iterable;
-        this.#callback = callback;
+        this.#map = map;
     }
-
-
 
     override into_iter(): Iterator<B> {
         this.#iter.into_iter();
@@ -847,18 +845,18 @@ class Map<A, B> extends Iterator<B> {
     }
 
     next(): IteratorResult<B> {
-        const n = this.#iter.next();
-        return !n.done ? { done: false, value: this.#callback(n.value) } : done();
+        return map_next(this.#iter.next(), v => this.#map(v))
     }
+
 }
 
 class MapWhile<A, B> extends Iterator<B> {
     #iter: Iterator<A>
-    #fn: MustReturn<(value: A) => Option<B>>
-    constructor(iterable: Iterator<A>, callback: MustReturn<(value: A) => Option<B>>) {
+    #map: MustReturn<(value: A) => Option<B>>
+    constructor(iterable: Iterator<A>, map: MustReturn<(value: A) => Option<B>>) {
         super()
         this.#iter = iterable
-        this.#fn = callback;
+        this.#map = map;
     }
 
     override into_iter(): Iterator<B> {
@@ -871,7 +869,7 @@ class MapWhile<A, B> extends Iterator<B> {
         if (n.done) {
             return done();
         }
-        const v = this.#fn(n.value);
+        const v = this.#map(n.value);
         return is_some(v) ? { done: false, value: v } : done();
     }
 }
@@ -993,7 +991,6 @@ class SkipWhile<T> extends Iterator<T> {
         this.#predicate = predicate;
         this.#needs_skip = true;
     }
-    // @ts-expect-error
     override next(): IteratorResult<T> {
         if (!this.#needs_skip) {
             return this.#iter.next()
@@ -1004,6 +1001,7 @@ class SkipWhile<T> extends Iterator<T> {
                     return n;
                 }
             }
+            return done();
         }
     }
 
@@ -1209,11 +1207,11 @@ class Take<T> extends Iterator<T> {
 
 class TakeWhile<T> extends Iterator<T> {
     #iter: Iterator<T>;
-    #callback: (value: T) => boolean;
-    constructor(iterable: Iterator<T>, callback: (value: T) => boolean) {
+    #predicate: (value: T) => boolean;
+    constructor(iterable: Iterator<T>, predicate: (value: T) => boolean) {
         super();
         this.#iter = iterable;
-        this.#callback = callback;
+        this.#predicate = predicate;
     }
 
     override into_iter(): Iterator<T> {
@@ -1227,7 +1225,7 @@ class TakeWhile<T> extends Iterator<T> {
             return done()
         }
 
-        if (this.#callback(n.value)) {
+        if (this.#predicate(n.value)) {
             return n
         }
 
@@ -1321,6 +1319,14 @@ class Peekable<T> extends Iterator<T> {
 
 }
 
+export function zip_next<K, V>(i1: Iterator<K>, i2: Iterator<V>): IteratorResult<[K, V]> {
+    const k = i1.next()
+    const v = i2.next()
+
+    return (k.done || v.done) ? done() : { done: false, value: [k.value, v.value] as [K, V] }
+
+}
+
 class Zip<K, V> extends Iterator<[K, V]> {
     #iter: Iterator<K>;
     #other: Iterator<V>;
@@ -1339,10 +1345,7 @@ class Zip<K, V> extends Iterator<[K, V]> {
     }
 
     override next(): IteratorResult<[K, V]> {
-        const k = this.#iter.next()
-        const v = this.#other.next()
-
-        return (k.done || v.done) ? done() : { done: false, value: [k.value, v.value] as [K, V] }
+        return zip_next(this.#iter, this.#other);
     }
 }
 
@@ -1370,7 +1373,11 @@ export class Generator<T> extends Iterator<T> {
 
 //* --- free standing functions ---
 
-class FromFn<T> extends Iterator<T> {
+export function from_fn<T>(f: () => Option<T>): FromFn<T> {
+    return new FromFn(f)
+}
+
+export class FromFn<T> extends Iterator<T> {
     #fn: () => Option<T>;
     constructor(fn: () => Option<T>) {
         super()
@@ -1402,10 +1409,6 @@ class FromFn<T> extends Iterator<T> {
     }}).collect() // [1, 2, 3, 4, 5]
  * 
  */
-export function from_fn<T>(f: () => Option<T>): FromFn<T> {
-    return new FromFn(f)
-}
-
 
 class Successors<T> extends Iterator<T> {
     #next: Option<T>;

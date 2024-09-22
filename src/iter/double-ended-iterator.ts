@@ -1,8 +1,8 @@
 import { assert } from "../util";
 import { Option, Err, Result, Ok, is_error, is_some, ErrorExt } from "joshkaposh-option";
-import { Iterator, filter_map_next, from_fn } from './iterator'
+import { Iterator, from_fn } from './iterator'
 import type { DoubleEndedIteratorInputType, Item, MustReturn, SizeHint, ArrayLikeType } from '../types'
-import { done, iter_item, NonZeroUsize, non_zero_usize } from "../shared";
+import { done, NonZeroUsize, non_zero_usize, map_next } from "../shared";
 import { iter } from ".";
 
 type FlatType<T> = DoubleEndedIterator<DoubleEndedIterator<T>>;
@@ -28,7 +28,7 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return
     }
 
-    override chain<O extends DoubleEndedIteratorInputType<true>>(other: O): DoubleEndedIterator<T | Item<O>> {
+    override chain<O extends DoubleEndedIteratorInputType<T>>(other: O): DoubleEndedIterator<T> {
         return new Chain(this, other)
     }
 
@@ -95,7 +95,14 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
     }
 
     rfind_map<B>(callback: MustReturn<(value: T) => Option<B>>) {
-        return filter_map_next_back(this, callback).value
+        let n;
+        while (!(n = this.next_back()).done) {
+            const elt = callback(n.value);
+            if (is_some(elt)) {
+                return elt
+            }
+        }
+        return
     }
 
     /**
@@ -207,28 +214,28 @@ export class FusedDoubleEndedIterator<T> extends DoubleEndedIterator<T> {
 
 // * --- Adapters ---
 
-class Chain<T1, T2> extends DoubleEndedIterator<T1 | T2> {
-    #iter: DoubleEndedIterator<T1>
-    #other: DoubleEndedIterator<T2>
+class Chain<T> extends DoubleEndedIterator<T> {
+    #iter: DoubleEndedIterator<T>
+    #other: DoubleEndedIterator<T>
 
-    constructor(iterable: DoubleEndedIterator<T1>, other: DoubleEndedIteratorInputType<true>) {
+    constructor(iterable: DoubleEndedIterator<T>, other: DoubleEndedIteratorInputType<T>) {
         super()
         this.#iter = iterable;
-        this.#other = iter(other) as DoubleEndedIterator<T2>;
+        this.#other = iter(other) as DoubleEndedIterator<T>;
     }
 
-    override into_iter(): DoubleEndedIterator<T1 | T2> {
+    override into_iter(): DoubleEndedIterator<T> {
         this.#iter.into_iter();
         this.#other.into_iter()
         return this
     }
 
-    override next(): IteratorResult<T1 | T2> {
+    override next(): IteratorResult<T> {
         const n = this.#iter.next();
         return !n.done ? n : this.#other.next();
     }
 
-    override next_back(): IteratorResult<T1 | T2> {
+    override next_back(): IteratorResult<T> {
         const n = this.#other.next_back();
         return !n.done ? n : this.#iter.next_back();
     }
@@ -283,16 +290,16 @@ class Enumerate<T> extends ExactSizeDoubleEndedIterator<[number, T]> {
         return this
     }
 
-    next() {
+    next(): IteratorResult<[number, T]> {
         this.#index++;
         const n = this.#iter.next();
-        return !n.done ? iter_item([this.#index, n.value] as [number, T]) : done<[number, T]>()
+        return map_next(n, (v) => [this.#index, v])
     }
 
-    next_back() {
+    next_back(): IteratorResult<[number, T]> {
         this.#index++;
         const n = this.#iter.next_back();
-        return !n.done ? iter_item([this.#index, n.value] as [number, T]) : done<[number, T]>()
+        return map_next(n, (v) => [this.#index, v])
     }
 
 }
@@ -344,17 +351,6 @@ class Filter<T> extends DoubleEndedIterator<T> {
     }
 }
 
-function filter_map_next_back<A, B>(it: DoubleEndedIterator<A>, fn: (value: A) => Option<B>): IteratorResult<B> {
-    let n;
-    while (!(n = it.next_back()).done) {
-        const elt = fn(n.value);
-        if (is_some(elt)) {
-            return { done: false, value: elt }
-        }
-    }
-    return done()
-}
-
 class FilterMap<A, B> extends DoubleEndedIterator<B> {
     #iter: DoubleEndedIterator<A>;
     #fn: (value: A) => Option<B>;
@@ -371,11 +367,25 @@ class FilterMap<A, B> extends DoubleEndedIterator<B> {
     }
 
     override next(): IteratorResult<B> {
-        return filter_map_next(this.#iter, this.#fn) as IteratorResult<B>
+        let n;
+        while (!(n = this.#iter.next()).done) {
+            const elt = this.#fn(n.value);
+            if (is_some(elt)) {
+                return { done: false, value: elt }
+            }
+        }
+        return done()
     }
 
     override next_back(): IteratorResult<B> {
-        return filter_map_next_back(this.#iter, this.#fn) as IteratorResult<B>
+        let n;
+        while (!(n = this.#iter.next_back()).done) {
+            const elt = this.#fn(n.value);
+            if (is_some(elt)) {
+                return { done: false, value: elt }
+            }
+        }
+        return done()
     }
 }
 
@@ -603,13 +613,11 @@ class Map<A, B> extends DoubleEndedIterator<B> {
     }
 
     next() {
-        const n = this.#iter.next();
-        return !n.done ? iter_item(this.#callback(n.value)) : done<B>();
+        return map_next(this.#iter.next(), v => this.#callback(v));
     }
 
     next_back() {
-        const n = this.#iter.next_back();
-        return !n.done ? iter_item(this.#callback(n.value)) : done<B>();
+        return map_next(this.#iter.next_back(), v => this.#callback(v));
     }
 }
 
@@ -628,7 +636,7 @@ class MapWhile<A, B> extends DoubleEndedIterator<B> {
             return done();
         }
         const v = this.#fn(n.value);
-        return is_some(v) ? iter_item(v) : done();
+        return is_some(v) ? { done: false, value: v } : done();
     }
 
     override next_back(): IteratorResult<B> {
@@ -637,7 +645,7 @@ class MapWhile<A, B> extends DoubleEndedIterator<B> {
             return done();
         }
         const v = this.#fn(n.value);
-        return is_some(v) ? iter_item(v) : done();
+        return is_some(v) ? { done: false, value: v } : done();
     }
 
 }
@@ -1338,14 +1346,14 @@ class Zip<K, V> extends DoubleEndedIterator<[K, V]> {
         const k = this.#iter.next()
         const v = this.#other.next()
 
-        return (k.done || v.done) ? done<[K, V]>() : iter_item([k.value, v.value] as [K, V])
+        return (k.done || v.done) ? done() : { done: false, value: [k.value, v.value] }
     }
 
     override next_back(): IteratorResult<[K, V]> {
         const k = this.#iter.next_back()
         const v = this.#other.next_back()
 
-        return (k.done || v.done) ? done<[K, V]>() : iter_item([k.value, v.value] as [K, V])
+        return (k.done || v.done) ? done<[K, V]>() : { done: false, value: [k.value, v.value] }
     }
 }
 
@@ -1363,7 +1371,7 @@ class Once<T> extends DoubleEndedIterator<T> {
     override next(): IteratorResult<T> {
         const taken = this.#taken;
         this.#taken = true;
-        return taken ? done() : iter_item(this.#item);
+        return taken ? done() : { done: false, value: this.#item }
     }
 
     override next_back(): IteratorResult<T> {
@@ -1392,7 +1400,7 @@ class OnceWith<T> extends DoubleEndedIterator<T> {
     override next(): IteratorResult<T> {
         const taken = this.#taken;
         this.#taken = true;
-        return taken ? done() : iter_item(this.#fn());
+        return taken ? done() : { done: false, value: this.#fn() };
     }
 
     override next_back(): IteratorResult<T> {
@@ -1421,11 +1429,11 @@ class Repeat<T> extends DoubleEndedIterator<T> {
     }
 
     override next(): IteratorResult<T> {
-        return iter_item(this.#element)
+        return { done: false, value: this.#element }
     }
 
     override next_back(): IteratorResult<T> {
-        return iter_item(this.#element)
+        return { done: false, value: this.#element }
     }
 
     override advance_by(_: number): Result<Ok, NonZeroUsize> {
@@ -1468,11 +1476,11 @@ class RepeatWith<T> extends DoubleEndedIterator<T> {
     }
 
     override next(): IteratorResult<T> {
-        return iter_item(this.#gen())
+        return { done: false, value: this.#gen() }
     }
 
     override next_back(): IteratorResult<T> {
-        return iter_item(this.#gen());
+        return { done: false, value: this.#gen() }
     }
 
     override advance_by(_: number): Result<Ok, NonZeroUsize> {
@@ -1529,7 +1537,7 @@ export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
         }
 
         const item = this.#iterable[this.#index];
-        return is_some(item) ? iter_item(item) : done();
+        return is_some(item) ? { done: false, value: item } : done();
     }
 
     next_back(): IteratorResult<T> {
@@ -1538,7 +1546,7 @@ export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
             return done<T>();
         }
         const item = this.#iterable[this.#back_index]
-        return is_some(item) ? iter_item(item) : done();
+        return is_some(item) ? { done: false, value: item } : done();
     }
 
     override advance_by(n: number): Result<undefined, NonZeroUsize> {
@@ -1610,16 +1618,16 @@ export class Range extends ExactSizeDoubleEndedIterator<number> {
             return done()
         }
 
-        return iter_item(this.#index)
+        return { done: false, value: this.#index }
     }
 
     next_back(): IteratorResult<number> {
         this.#back_index--;
-        if (this.#back_index <= this.#index) {
+        if (this.#index >= this.#back_index) {
             return done()
         }
 
-        return iter_item(this.#back_index)
+        return { done: false, value: this.#back_index }
     }
 }
 /**
@@ -1665,28 +1673,22 @@ class Drain<T> extends ExactSizeDoubleEndedIterator<T> {
     }
 
     override next(): IteratorResult<T> {
-        const n = this.#range.next();
-        if (n.done) {
-            return done()
-        } else {
-            const index = n.value - this.#taken.length;
+        return map_next(this.#range.next(), i => {
+            const index = i - this.#taken.length;
             const elt = this.#array[index];
             this.#taken.push(elt);
             this.#array.splice(index, 1);
-            return iter_item(elt)
-        }
+            return elt;
+        })
     }
 
     override next_back(): IteratorResult<T> {
-        const n = this.#range.next_back();
-        if (n.done) {
-            return done()
-        } else {
-            const index = n.value;
+        return map_next(this.#range.next_back(), i => {
+            const index = i - this.#taken.length;
             const elt = this.#array[index];
             this.#array.splice(index, 1);
-            return iter_item(elt)
-        }
+            return elt;
+        })
 
     }
 }

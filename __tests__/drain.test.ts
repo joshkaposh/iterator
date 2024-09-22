@@ -25,7 +25,6 @@ test('drain_partial', () => {
     arr = [1, 2, 3, 4];
     drained = drain(arr, range(2, arr.length)).collect();
     assert(arr.length === 2);
-    console.log(arr, drained);
     expect(arr).toEqual([1, 2]);
     expect(drained).toEqual([3, 4]);
 })

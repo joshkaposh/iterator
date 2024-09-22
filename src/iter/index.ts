@@ -2,7 +2,7 @@ import { is_arraylike, is_primitive } from "../util";
 import { ArrayLike } from "./double-ended-iterator";
 import { Generator } from "./iterator";
 import type { IterInputType, Iter } from '../types'
-import { iter_type } from "../shared";
+import { iter_type, done, map_next } from "../shared";
 
 export function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
     const ty = iter_type(iterable);
@@ -30,4 +30,6 @@ export * from './double-ended-iterator';
 export {
     is_arraylike,
     is_primitive,
+    done,
+    map_next
 }

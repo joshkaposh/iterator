@@ -17,6 +17,10 @@ export function iter_item<T>(value: T): IteratorYieldResult<T> {
     }
 }
 
+export function map_next<A, B>(prev: IteratorResult<A>, next: (value: A) => B): IteratorResult<B> {
+    return !prev.done ? { done: false, value: next(prev.value) } : done();
+}
+
 export function iter_type<It extends IterInputType<any>>(iterable: It) {
     if (iterable instanceof Iterator || iterable instanceof AsyncIterator) {
         return 'iter'
