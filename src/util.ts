@@ -1,6 +1,12 @@
 import { type None, type Option, is_none, is_some } from "joshkaposh-option";
 import type { Primitive } from "./types";
 
+
+export type Orderable<T> = T extends string ? T :
+    T extends number ? T :
+    T extends { [Symbol.toPrimitive](): Option<string | number | boolean> } ? T :
+    never;
+
 export type Prettify<T> = { [K in keyof T]: T[K] } & {}
 
 export type Expect<T extends true> = T;

@@ -1,8 +1,19 @@
 import { assert, expect, test } from 'vitest'
 import { ErrorExt, Option } from 'joshkaposh-option'
-import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with } from "../src";
+import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with, range } from "../src";
 import { count, count_str, expect_error, fill, fill_str, fill_with, toInfinityAndBeyond } from './helpers';
 import { type IteratorInputType } from '../src/types';
+
+test('size_hint', () => {
+    let it = iter([1, 2, 3]);
+    assert(it.len() === 3);
+    it.position(v => v === 1)
+    assert(it.len() === 2);
+    let r = range(1, 4);
+    assert(r.len() === 3)
+    assert(r.count() === 3)
+    assert(r.len() === 3)
+})
 
 test('valid iter arguments', () => {
     iter_test([1], [1])
@@ -135,6 +146,30 @@ function parse_int(str: string): Option<number> {
     const n = parseInt(str);
     return !Number.isNaN(n) ? n : undefined;
 }
+
+test('position', () => {
+
+    assert(iter.of(1, 2, 3)
+        .position((v) => v === 1) === 0
+    )
+
+    let r = range(1, 1000);
+    let times_called = 0
+
+    for (const n of range(r.start, r.end)) {
+        times_called += 1;
+        assert(r.position(v => v === n) === 0)
+    }
+    assert(times_called === 999)
+
+    r = range(1, 1000);
+    times_called = 0
+    for (const n of range(r.start, r.end).rev()) {
+        times_called += 1
+        assert(r.rposition(v => v === n) === n - 1)
+    }
+    assert(times_called === 999)
+})
 
 test('find_map', () => {
     const base = ["lol", 'abc', '2', '3'];
@@ -378,11 +413,8 @@ test('step_by', () => {
     expect(step_double.next().value).toBe(4)
     expect(step_double.next().value).toBe(undefined)
 
-    const step_infinite = iter(toInfinityAndBeyond).take(1000).step_by(9);
+    iter(toInfinityAndBeyond).take(1000).step_by(9);
 
-    // for (const step of step_infinite) {
-    //     console.log(step);
-    // }
 })
 
 test('take', () => {

@@ -2,13 +2,9 @@ import { iter, map_next } from ".";
 import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt } from "joshkaposh-option";
 import { done, NonZeroUsize, non_zero_usize } from "../shared";
 import type { IteratorInputType, MustReturn, Item, SizeHint, GeneratorType, IterInputType } from '../types';
+import type { Orderable } from "../util";
 
 type FlatType<T> = Iterator<Iterator<T>>;
-
-type CanGtLt<T> = T extends string ? T :
-    T extends number ? T :
-    T extends { [Symbol.toPrimitive](): Option<string | number | boolean> } ? T :
-    never;
 
 export interface Iterator<T> {
     advance_by(n: number): Result<Ok, NonZeroUsize>
@@ -276,32 +272,32 @@ export abstract class Iterator<T> {
     }
 
     //! Caller must ensure T = number
-    max(): Option<CanGtLt<T>> {
+    max(): Option<Orderable<T>> {
         const n = this.next();
         if (n.done) {
             return
         } else {
             const ty = typeof n.value;
             if (ty === 'number') {
-                return Math.max(n.value as number, ...this as unknown as Iterator<number>) as CanGtLt<T>;
+                return Math.max(n.value as number, ...this as unknown as Iterator<number>) as Orderable<T>;
             } else if (ty === 'string') {
-                return this.fold(n.value as CanGtLt<T>, (acc, x) => (acc > x as unknown as CanGtLt<T> ? acc : x as CanGtLt<T>)) as CanGtLt<T>
+                return this.fold(n.value as Orderable<T>, (acc, x) => (acc > x as unknown as Orderable<T> ? acc : x as Orderable<T>)) as Orderable<T>
             }
 
             throw new Error(`Cannot call 'max' on an Iterator of type ${ty}. Accepted element types are 'string' or 'number'`)
         }
     }
     //! Caller must ensure T = number
-    min(): Option<CanGtLt<T>> {
+    min(): Option<Orderable<T>> {
         const n = this.next();
         if (n.done) {
             return;
         } else {
             const ty = typeof n.value;
             if (ty === 'number') {
-                return Math.min(n.value as number, ...this as Iterator<number>) as CanGtLt<T>;
+                return Math.min(n.value as number, ...this as Iterator<number>) as Orderable<T>;
             } else if (ty === 'string') {
-                return this.fold(n.value as CanGtLt<T>, (acc, x) => (acc > x as unknown as CanGtLt<T> ? acc : x as CanGtLt<T>))
+                return this.fold(n.value as Orderable<T>, (acc, x) => (acc > x as unknown as Orderable<T> ? acc : x as Orderable<T>))
             }
 
             throw new Error(`Cannot call 'max' on an Iterator of type ${ty}. Accepted element types are 'string' or 'number'`)
@@ -336,6 +332,15 @@ export abstract class Iterator<T> {
 
     peekable(): Iterator<T> & { peek: () => IteratorResult<T>; } {
         return new Peekable(this)
+    }
+
+    position(predicate: (value: T) => boolean): Option<number> {
+        let index = -1;
+        const found = this.find(n => {
+            index += 1;
+            return predicate(n)
+        })
+        return found ? index : null
     }
 
     reduce(callback: (acc: T, inc: T) => T): Option<T> {

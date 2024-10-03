@@ -171,6 +171,16 @@ export abstract class ExactSizeDoubleEndedIterator<T> extends DoubleEndedIterato
         return this.len() === 0;
     }
 
+    rposition(predicate: (value: T) => boolean): Option<number> {
+        let index = this.len();
+
+        const found = this.rfind((v) => {
+            index -= 1;
+            return predicate(v)
+        })
+        return found ? index : null
+    }
+
     override step_by(n: number): ExactSizeDoubleEndedIterator<T> {
         return new StepBy(this, n);
     }
@@ -1628,6 +1638,15 @@ export class Range extends ExactSizeDoubleEndedIterator<number> {
         }
 
         return { done: false, value: this.#back_index }
+    }
+
+    override size_hint(): SizeHint<number, number> {
+        const count = Math.max(0, this.#back_index - this.#index - 1)
+        return [count, count] as SizeHint<number, number>;
+    }
+
+    override count(): number {
+        return this.len();
     }
 }
 /**

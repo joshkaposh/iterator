@@ -1,10 +1,11 @@
 import { is_arraylike, is_primitive } from "../util";
-import { ArrayLike } from "./double-ended-iterator";
-import { Generator } from "./iterator";
+import { ArrayLike, DoubleEndedIterator, ExactSizeDoubleEndedIterator, FusedDoubleEndedIterator, once, once_with, repeat, repeat_with, range, Range, drain } from "./double-ended-iterator";
+import { Generator, Iterator, FusedIterator, ExactSizeIterator, successors, from_fn } from "./iterator";
 import type { IterInputType, Iter } from '../types'
 import { iter_type, done, map_next } from "../shared";
 
-export function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
+
+export default function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
     const ty = iter_type(iterable);
     if (ty === 'iter') {
         return iterable as unknown as Iter<It>;
@@ -24,12 +25,40 @@ export function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
     }
 }
 
-export * from './iterator'
-export * from './double-ended-iterator';
+iter.of = function <T>(...t: T[]): ExactSizeDoubleEndedIterator<T> {
+    return new ArrayLike(t);
+}
+iter.successors = successors;
+iter.from_fn = from_fn;
+
+
+
 
 export {
+    iter,
+    range,
+
+    drain,
+    once,
+    once_with,
+    repeat,
+    repeat_with,
+    successors,
+    from_fn,
+
     is_arraylike,
-    is_primitive,
     done,
-    map_next
+    map_next,
+
+    Iterator,
+    ExactSizeIterator,
+    FusedIterator,
+
+    DoubleEndedIterator,
+    ExactSizeDoubleEndedIterator,
+    FusedDoubleEndedIterator,
+
+    Generator,
+    ArrayLike,
+    Range,
 }
