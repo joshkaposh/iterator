@@ -3,7 +3,7 @@ import { assert } from "../util";
 import { AsyncIterator } from "./async-iterator";
 import { NonZeroUsize, done, iter_item, non_zero_usize } from "../shared";
 import { async_iter, from_async_fn } from ".";
-import type { AsyncDoubleEndedIteratorInputType, SizeHint, Item, MustReturn } from "../types";
+import type { AsyncDoubleEndedIteratorInputType, SizeHint, Item } from "../types";
 
 export interface AsyncDoubleEndedIterator<T> {
     advance_back_by(n: number): Promise<Result<Ok<undefined>, NonZeroUsize>>
@@ -46,7 +46,7 @@ export abstract class AsyncDoubleEndedIterator<T> extends AsyncIterator<T> {
         return new Flatten(this as any) as any
     }
 
-    override flat_map<B>(f: MustReturn<(value: T) => B>): AsyncDoubleEndedIterator<B> {
+    override flat_map<B>(f: (value: T) => B): AsyncDoubleEndedIterator<B> {
         return new FlatMap(this as any, f)
     }
 
@@ -58,11 +58,11 @@ export abstract class AsyncDoubleEndedIterator<T> extends AsyncIterator<T> {
         return new Inspect(this, callback)
     }
 
-    override map<B>(f: MustReturn<(value: T) => Promise<B> | B>): AsyncDoubleEndedIterator<B> {
+    override map<B>(f: (value: T) => Promise<B> | B): AsyncDoubleEndedIterator<B> {
         return new Map(this, f) as unknown as AsyncDoubleEndedIterator<B>
     }
 
-    override map_while<B>(f: MustReturn<(value: T) => B>): AsyncDoubleEndedIterator<B> {
+    override map_while<B>(f: (value: T) => B): AsyncDoubleEndedIterator<B> {
         return new MapWhile(this, f)
     }
 

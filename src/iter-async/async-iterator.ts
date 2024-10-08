@@ -1,6 +1,6 @@
 import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt } from "joshkaposh-option";
 import { NonZeroUsize, done, iter_item, non_zero_usize } from "../shared";
-import type { AsyncIteratorInputType, MustReturn, Item, SizeHint } from "../types";
+import type { AsyncIteratorInputType, Item, SizeHint } from "../types";
 import { async_iter } from ".";
 
 export interface AsyncIterator<T> {
@@ -118,7 +118,7 @@ export abstract class AsyncIterator<T> {
         return new Flatten(this as any)
     }
 
-    flat_map<B>(f: MustReturn<(value: T) => B>): AsyncIterator<B> {
+    flat_map<B>(f: (value: T) => B): AsyncIterator<B> {
         return new FlatMap(this as any, f)
     }
 
@@ -184,11 +184,11 @@ export abstract class AsyncIterator<T> {
         return new IntersperseWith(this, separator)
     }
 
-    map<B>(f: MustReturn<(value: T) => Promise<B> | B>): AsyncIterator<B> {
-        return new Map(this, f) as unknown as AsyncIterator<B>
+    map<B>(f: (value: T) => Promise<B> | B): AsyncIterator<B> {
+        return new Map(this, f);
     }
 
-    map_while<B>(f: MustReturn<(value: T) => B>): AsyncIterator<B> {
+    map_while<B>(f: (value: T) => B): AsyncIterator<B> {
         return new MapWhile(this, f)
     }
 
@@ -750,9 +750,9 @@ class IntersperseWith<T> extends ExactSizeAsyncIterator<T> {
 }
 
 class Map<A, B> extends AsyncIterator<B> {
-    #callback: MustReturn<(value: A) => Promise<B> | B>;
+    #callback: (value: A) => Promise<B> | B;
     #iter: AsyncIterator<A>;
-    constructor(iterable: AsyncIterator<A>, callback: MustReturn<(value: A) => Promise<B> | B>) {
+    constructor(iterable: AsyncIterator<A>, callback: (value: A) => Promise<B> | B) {
         super()
         this.#iter = iterable;
         this.#callback = callback;
@@ -771,8 +771,8 @@ class Map<A, B> extends AsyncIterator<B> {
 
 class MapWhile<A, B> extends AsyncIterator<B> {
     #iter: AsyncIterator<A>
-    #fn: MustReturn<(value: A) => Option<B>>
-    constructor(iterable: AsyncIterator<A>, callback: MustReturn<(value: A) => Option<B>>) {
+    #fn: (value: A) => Option<B>
+    constructor(iterable: AsyncIterator<A>, callback: (value: A) => Option<B>) {
         super()
         this.#iter = iterable
         this.#fn = callback;
