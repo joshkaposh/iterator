@@ -1,7 +1,7 @@
 import { is_arraylike, is_primitive } from "../util";
 import { ArrayLike, DoubleEndedIterator, ExactSizeDoubleEndedIterator, FusedDoubleEndedIterator, once, once_with, repeat, repeat_with, range, Range, drain } from "./double-ended-iterator";
 import { Generator, Iterator, FusedIterator, ExactSizeIterator, successors, from_fn } from "./iterator";
-import type { IterInputType, Iter } from '../types'
+import type { IterInputType, Iter, ArrayLikeType, Item, GeneratorType } from '../types'
 import { iter_type, done, map_next } from "../shared";
 
 
@@ -10,13 +10,13 @@ export default function iter<It extends IterInputType<any>>(iterable: It): Iter<
     if (ty === 'iter') {
         return iterable as unknown as Iter<It>;
     } else if (ty === 'arraylike') {
-        return new ArrayLike(iterable as any) as unknown as Iter<It>
+        return new ArrayLike(iterable as ArrayLikeType<Item<It>>) as unknown as Iter<It>
     } else if (ty === 'iterable') {
         // @ts-expect-error
         return new Generator(() => iterable[Symbol.iterator]()) as unknown as Iter<It>
     } else if (ty === 'function') {
         //! SAFETY: User ensures provided function returns an Iterator
-        return new Generator(iterable as any) as unknown as Iter<It>
+        return new Generator(iterable as () => GeneratorType<Item<It>>) as unknown as Iter<It>
     } else {
         const msg = is_primitive(iterable) ?
             `Cannot construct an Iterator from primitive '${String(iterable)}'` :

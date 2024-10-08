@@ -53,7 +53,7 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
     }
 
     override flat_map<B extends DoubleEndedIterator<any>>(f: (value: T) => Option<B>): DoubleEndedIterator<Item<B>> {
-        return new FlatMap(this as any, f)
+        return new FlatMap(this, f)
     }
 
     override fuse(): DoubleEndedIterator<T> {
@@ -139,17 +139,19 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new TakeWhile(this, callback)
     }
 
-    try_rfold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+    try_rfold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
         let acc = initial;
         let next;
         while (!(next = this.next_back()).done) {
             const val = fold(acc, next.value);
-            acc = val as unknown as B
+            acc = val as unknown as B;
+
             if (is_error(val)) {
                 break;
             }
+
         }
-        return acc as Result<B, Err>;
+        return acc
     }
 
     override zip<V>(other: DoubleEndedIteratorInputType<V>): DoubleEndedIterator<[T, V]> {
@@ -549,7 +551,7 @@ class FlatMap<A, B extends DoubleEndedIterator<any>> extends DoubleEndedIterator
                 return done();
             }
 
-            this.#inner = iter(inner) as any;
+            this.#inner = iter(inner) as unknown as B;
         }
 
         return this.#next_loop();
@@ -568,7 +570,7 @@ class FlatMap<A, B extends DoubleEndedIterator<any>> extends DoubleEndedIterator
                 return done();
             }
 
-            this.#inner = iter(inner) as any;
+            this.#inner = iter(inner) as unknown as B;
         }
 
         return this.#next_back_loop();
@@ -795,26 +797,26 @@ class Skip<T> extends ExactSizeDoubleEndedIterator<T> {
         return this.#iter.last()
     }
 
-    override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+    override try_fold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
         const n = this.#n;
         this.#n = 0;
 
         if (n > 0) {
             if (this.#iter.nth(n - 1).done) {
-                return initial as Result<B, Err>;
+                return initial
             }
         }
 
         return this.#iter.try_fold(initial, fold)
     }
 
-    override try_rfold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
-        function check(n: number, fold: (acc: B, inc: T) => Result<B, Err>): (acc: B, inc: T) => Result<B, Err> {
+    override try_rfold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
+        function check(n: number, fold: (acc: B, inc: T) => Result<B, E>): (acc: B, inc: T) => Result<B, E> {
             return (acc, x) => {
                 n -= 1;
                 let r = fold(acc, x);
                 if (n === 0) {
-                    return new ErrorExt(r)
+                    return new ErrorExt(r) as E
                 }
                 return r
             }
@@ -1006,7 +1008,7 @@ class StepBy<T> extends ExactSizeDoubleEndedIterator<T> {
             }
         }
 
-        return from_fn(nth(this.#iter, this.#step)).fold(initial, fold as any)
+        return from_fn(nth(this.#iter, this.#step)).fold(initial, fold)
     }
 
     override rfold<B>(initial: B, fold: (acc: B, x: T) => B): B {
@@ -1019,11 +1021,11 @@ class StepBy<T> extends ExactSizeDoubleEndedIterator<T> {
             return initial;
         } else {
             let acc = fold(initial, n.value);
-            return from_fn(nth_back(this.#iter, this.#step)).fold(acc, fold as any)
+            return from_fn(nth_back(this.#iter, this.#step)).fold(acc, fold)
         }
     }
 
-    override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+    override try_fold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
         function nth(iter: ExactSizeDoubleEndedIterator<T>, step: number) {
             return () => iter.nth(step);
         }
@@ -1037,10 +1039,10 @@ class StepBy<T> extends ExactSizeDoubleEndedIterator<T> {
                 initial = fold(initial, n.value) as B;
             }
         }
-        return from_fn(nth(this.#iter, this.#step)).try_fold(initial, fold as any)
+        return from_fn(nth(this.#iter, this.#step)).try_fold(initial, fold) as Result<B, E>
     }
 
-    override try_rfold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+    override try_rfold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
         function nth_back(iter: ExactSizeDoubleEndedIterator<T>, step: number) {
             return () => iter.nth_back(step)
         }
@@ -1050,7 +1052,10 @@ class StepBy<T> extends ExactSizeDoubleEndedIterator<T> {
             return initial;
         } else {
             let acc = fold(initial, n.value);
-            return from_fn(nth_back(this.#iter, this.#step)).try_fold(acc as any, fold as any)
+            if (is_error(acc)) {
+                return acc;
+            }
+            return from_fn(nth_back(this.#iter, this.#step)).try_fold(acc, fold)
         }
     }
 }
@@ -1113,13 +1118,13 @@ class Take<T> extends DoubleEndedIterator<T> {
         return [lo, hi];
     }
 
-    override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
-        function check(n: number, fold: (acc: B, inc: T) => Result<B, Err>): (acc: B, inc: T) => Result<B, Err> {
+    override try_fold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
+        function check(n: number, fold: (acc: B, inc: T) => Result<B, E>): (acc: B, inc: T) => Result<B, E> {
             return (acc, x) => {
                 n -= 1;
                 let r = fold(acc, x)
 
-                return n === 0 ? new ErrorExt(r) : r
+                return n === 0 ? new ErrorExt(r) as E : r
             }
         }
         if (this.#n === 0) {
@@ -1171,7 +1176,7 @@ class Take<T> extends DoubleEndedIterator<T> {
         }
     }
 
-    override try_rfold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+    override try_rfold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
         if (this.#n === 0) {
             return initial
         } else {

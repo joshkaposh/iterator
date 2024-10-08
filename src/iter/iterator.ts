@@ -144,7 +144,7 @@ export abstract class Iterator<T> {
      * @see `Iterator.flatten` and `Iterator.map` for more information.
      */
     flat_map<B extends Iterator<any>>(f: (value: T) => Option<B>): Iterator<Item<B>> {
-        return new FlatMap(this as any, f)
+        return new FlatMap(this, f)
     }
 
     /**
@@ -381,7 +381,7 @@ export abstract class Iterator<T> {
         return new TakeWhile(this, callback);
     }
 
-    try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+    try_fold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
         let acc = initial;
         let next;
         while (!(next = this.next()).done) {
@@ -391,7 +391,7 @@ export abstract class Iterator<T> {
                 break;
             }
         }
-        return acc as Result<B, Err>;
+        return acc as Result<B, E>;
     }
 
     unzip<K extends T extends readonly any[] ? T[0] : never, V extends T extends readonly any[] ? T[1] : never>(): [K[], V[]] {
@@ -696,7 +696,7 @@ class FlatMap<A, B extends Iterator<any>> extends Iterator<Item<B>> {
                 return done();
             }
 
-            this.#inner = iter(inner) as any;
+            this.#inner = iter(inner) as unknown as B;
         }
 
         return this.#next_loop();
@@ -963,13 +963,13 @@ class Skip<T> extends ExactSizeIterator<T> {
         return this.#iter.last()
     }
 
-    override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+    override try_fold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
         const n = this.#n;
         this.#n = 0;
 
         if (n > 0) {
             if (this.#iter.nth(n - 1).done) {
-                return initial as Result<B, Err>;
+                return initial
             }
         }
 
@@ -1115,10 +1115,10 @@ class StepBy<T> extends ExactSizeIterator<T> {
             }
         }
 
-        return from_fn(nth(this.#iter, this.#step)).fold(initial, fold as any)
+        return from_fn(nth(this.#iter, this.#step)).fold(initial, fold)
     }
 
-    override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
+    override try_fold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
         function nth(iter: Iterator<T>, step: number) {
             return () => iter.nth(step);
         }
@@ -1132,7 +1132,7 @@ class StepBy<T> extends ExactSizeIterator<T> {
                 initial = fold(initial, n.value) as B;
             }
         }
-        return from_fn(nth(this.#iter, this.#step)).try_fold(initial, fold as any)
+        return from_fn(nth(this.#iter, this.#step)).try_fold(initial, fold)
 
     }
 }
@@ -1182,13 +1182,13 @@ class Take<T> extends Iterator<T> {
         return [lo, hi];
     }
 
-    override try_fold<B>(initial: B, fold: (acc: B, inc: T) => Result<B, Err>): Result<B, Err> {
-        function check(n: number, fold: (acc: B, inc: T) => Result<B, Err>): (acc: B, inc: T) => Result<B, Err> {
+    override try_fold<B, E extends Err>(initial: B, fold: (acc: B, inc: T) => Result<B, E>): Result<B, E> {
+        function check(n: number, fold: (acc: B, inc: T) => Result<B, E>): (acc: B, inc: T) => Result<B, E> {
             return (acc, x) => {
                 n -= 1;
                 let r = fold(acc, x)
 
-                return n === 0 ? new ErrorExt(r) : r
+                return n === 0 ? new ErrorExt(r) as E : r
             }
         }
         if (this.#n === 0) {
@@ -1378,13 +1378,13 @@ export class Generator<T> extends Iterator<T> {
 
 //* --- free standing functions ---
 
-export function from_fn<T>(f: () => Option<T>): FromFn<T> {
+export function from_fn<T>(f: () => IteratorResult<T>): FromFn<T> {
     return new FromFn(f)
 }
 
 export class FromFn<T> extends Iterator<T> {
-    #fn: () => Option<T>;
-    constructor(fn: () => Option<T>) {
+    #fn: () => IteratorResult<T>;
+    constructor(fn: () => IteratorResult<T>) {
         super()
         this.#fn = fn;
     }
@@ -1394,8 +1394,7 @@ export class FromFn<T> extends Iterator<T> {
     }
 
     override next(): IteratorResult<T> {
-        const n = this.#fn();
-        return is_some(n) ? { done: false, value: n } : done();
+        return this.#fn();
     }
 }
 

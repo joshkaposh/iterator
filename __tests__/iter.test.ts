@@ -1,6 +1,6 @@
 import { assert, expect, test } from 'vitest'
 import { ErrorExt, Option } from 'joshkaposh-option'
-import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with, range } from "../src";
+import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with, range, done } from "../src";
 import { count, count_str, expect_error, fill, fill_str, fill_with, toInfinityAndBeyond } from './helpers';
 import { type IteratorInputType } from '../src/types';
 
@@ -34,14 +34,14 @@ test('valid iter arguments', () => {
 })
 
 test('from_fn', () => {
-    expect(from_fn(() => null).collect()).toEqual([]);
+    expect(from_fn(() => done()).collect()).toEqual([]);
     expect(from_fn(from(5)).collect()).toEqual([1, 2, 3, 4, 5]);
 
     function from(len: number) {
         let next = 0;
         return () => {
             next++;
-            return next > len ? null : next
+            return next > len ? done() : { done: false, value: next }
         };
     }
 })
@@ -357,9 +357,9 @@ test('free_standing_functions', () => {
             return () => {
                 count++;
                 if (count > 5) {
-                    return
+                    return done()
                 }
-                return count;
+                return { done: false, value: count };
             }
         })()
     )
