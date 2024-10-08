@@ -188,7 +188,7 @@ export abstract class Iterator<T> {
      * for_each() is useful if you want to do something with the elements of an Iterator but dont want to collect() into a Collection
     */
     for_each(callback: (value: T) => void) {
-        for (const item of this.into_iter()) {
+        for (const item of this) {
             callback(item);
         }
         return this;
