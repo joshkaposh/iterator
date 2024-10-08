@@ -1,7 +1,7 @@
 import { iter, map_next } from ".";
 import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt } from "joshkaposh-option";
 import { done, NonZeroUsize, non_zero_usize } from "../shared";
-import type { IteratorInputType, MustReturn, Item, SizeHint, GeneratorType, IterInputType } from '../types';
+import type { IteratorInputType, Item, SizeHint, GeneratorType, IterInputType } from '../types';
 import type { Orderable } from "../util";
 
 type FlatType<T> = Iterator<Iterator<T>>;
@@ -105,11 +105,11 @@ export abstract class Iterator<T> {
         return new Filter(this, callback)
     }
 
-    filter_map<B>(callback: MustReturn<(value: T) => Option<B>>): Iterator<B> {
+    filter_map<B>(callback: (value: T) => Option<B>): Iterator<B> {
         return new FilterMap(this, callback)
     }
 
-    find_map<B>(callback: MustReturn<(value: T) => Option<B>>): Option<B> {
+    find_map<B>(callback: (value: T) => Option<B>): Option<B> {
         let n;
         while (!(n = this.next()).done) {
             const elt = callback(n.value);
@@ -263,11 +263,11 @@ export abstract class Iterator<T> {
         return val;
     }
 
-    map<B>(f: MustReturn<(value: T) => B>): Iterator<B> {
+    map<B>(f: (value: T) => B): Iterator<B> {
         return new Map(this, f) as unknown as Iterator<B>
     }
 
-    map_while<B>(f: MustReturn<(value: T) => B>): Iterator<B> {
+    map_while<B>(f: (value: T) => B): Iterator<B> {
         return new MapWhile(this, f)
     }
 
@@ -836,9 +836,9 @@ class IntersperseWith<T> extends Iterator<T> {
 }
 
 class Map<A, B> extends Iterator<B> {
-    #map: MustReturn<(value: A) => B>;
+    #map: (value: A) => B;
     #iter: Iterator<A>;
-    constructor(iterable: Iterator<A>, map: MustReturn<(value: A) => B>) {
+    constructor(iterable: Iterator<A>, map: (value: A) => B) {
         super()
         this.#iter = iterable;
         this.#map = map;
@@ -857,8 +857,8 @@ class Map<A, B> extends Iterator<B> {
 
 class MapWhile<A, B> extends Iterator<B> {
     #iter: Iterator<A>
-    #map: MustReturn<(value: A) => Option<B>>
-    constructor(iterable: Iterator<A>, map: MustReturn<(value: A) => Option<B>>) {
+    #map: (value: A) => Option<B>
+    constructor(iterable: Iterator<A>, map: (value: A) => Option<B>) {
         super()
         this.#iter = iterable
         this.#map = map;

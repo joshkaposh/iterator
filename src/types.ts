@@ -11,7 +11,6 @@ export type Item<It> = It extends Iterable<infer T> ? T : never;
 
 export type SizeHint<Lo = number, Hi = Option<number>> = [Lo, Hi];
 
-export type MustReturn<F extends (...args: any[]) => any> = ReturnType<F> extends void ? never : F;
 export type Primitive = string | number | bigint | boolean | undefined | null | symbol;
 
 export type HasSymbolIterator<It, T = keyof It> = (T extends SymbolConstructor['iterator'] ? T : never) extends never ? 0 : 1;

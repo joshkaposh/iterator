@@ -1,7 +1,7 @@
 import { assert } from "../util";
 import { Option, Err, Result, Ok, is_error, is_some, ErrorExt } from "joshkaposh-option";
 import { Iterator, from_fn } from './iterator'
-import type { DoubleEndedIteratorInputType, Item, MustReturn, SizeHint, ArrayLikeType } from '../types'
+import type { DoubleEndedIteratorInputType, Item, SizeHint, ArrayLikeType } from '../types'
 import { done, NonZeroUsize, non_zero_usize, map_next } from "../shared";
 import { iter } from ".";
 
@@ -14,7 +14,7 @@ export interface DoubleEndedIterator<T> {
     chain<O extends DoubleEndedIterator<any>>(other: O): DoubleEndedIterator<T | Item<O>>;
     zip<V>(other: any): DoubleEndedIterator<[T, V]>
     into_iter(): DoubleEndedIterator<T>;
-    flat_map<O extends T extends Iterable<infer T2> ? T2 : never, B>(f: MustReturn<(value: O) => B>): DoubleEndedIterator<B>;
+    flat_map<O extends T extends Iterable<infer T2> ? T2 : never, B>(f: (value: O) => B): DoubleEndedIterator<B>;
 }
 export abstract class DoubleEndedIterator<T> extends Iterator<T> {
     abstract next_back(): IteratorResult<T>;
@@ -44,7 +44,7 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new Filter(this, callback);
     }
 
-    override filter_map<B>(callback: MustReturn<(value: T) => Option<B>>): DoubleEndedIterator<B> {
+    override filter_map<B>(callback: (value: T) => Option<B>): DoubleEndedIterator<B> {
         return new FilterMap(this, callback);
     }
 
@@ -64,7 +64,7 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new Inspect(this, callback)
     }
 
-    override map<B>(f: MustReturn<(value: T) => B>): DoubleEndedIterator<B> {
+    override map<B>(f: (value: T) => B): DoubleEndedIterator<B> {
         return new Map(this, f)
     }
 
@@ -94,7 +94,7 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return null;
     }
 
-    rfind_map<B>(callback: MustReturn<(value: T) => Option<B>>) {
+    rfind_map<B>(callback: (value: T) => Option<B>) {
         let n;
         while (!(n = this.next_back()).done) {
             const elt = callback(n.value);
