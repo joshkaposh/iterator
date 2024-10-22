@@ -15,6 +15,12 @@ test('size_hint', () => {
     assert(r.len() === 3)
 })
 
+test('scan', () => {
+    const it = iter.of(1, 2, 3);
+    const s = it.scan({ a: 0 }, (s, x) => { s.a += x; return s });
+    assert(s.a === 6);
+})
+
 test('valid iter arguments', () => {
     iter_test([1], [1])
     iter_test(function* () { yield 1 }, [1])

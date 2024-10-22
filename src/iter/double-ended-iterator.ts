@@ -2,7 +2,7 @@ import { assert } from "../util";
 import { Option, Err, Result, Ok, is_error, is_some, ErrorExt } from "joshkaposh-option";
 import { Iterator, from_fn } from './iterator'
 import type { DoubleEndedIteratorInputType, Item, SizeHint, ArrayLikeType } from '../types'
-import { done, NonZeroUsize, non_zero_usize, map_next } from "../shared";
+import { done, NonZeroUsize, non_zero_usize, map_next, item } from "../shared";
 import { iter } from ".";
 
 type FlatType<T> = DoubleEndedIterator<DoubleEndedIterator<T>>;
@@ -106,7 +106,6 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
     }
 
     /**
-     * @description
      * rfold() takes two arguments, an initial B and a folder (acc: B, element: T) => B.
      * 
      * rfold() will take an Iterator and reduce it down to a single value, starting from the right.
@@ -383,7 +382,7 @@ class FilterMap<A, B> extends DoubleEndedIterator<B> {
         while (!(n = this.#iter.next()).done) {
             const elt = this.#fn(n.value);
             if (is_some(elt)) {
-                return { done: false, value: elt }
+                return item(elt);
             }
         }
         return done()
@@ -394,7 +393,7 @@ class FilterMap<A, B> extends DoubleEndedIterator<B> {
         while (!(n = this.#iter.next_back()).done) {
             const elt = this.#fn(n.value);
             if (is_some(elt)) {
-                return { done: false, value: elt }
+                return item(elt)
             }
         }
         return done()
@@ -647,8 +646,8 @@ class MapWhile<A, B> extends DoubleEndedIterator<B> {
         if (n.done) {
             return done();
         }
-        const v = this.#fn(n.value);
-        return is_some(v) ? { done: false, value: v } : done();
+        const elt = this.#fn(n.value);
+        return is_some(elt) ? item(elt) : done();
     }
 
     override next_back(): IteratorResult<B> {
@@ -656,8 +655,8 @@ class MapWhile<A, B> extends DoubleEndedIterator<B> {
         if (n.done) {
             return done();
         }
-        const v = this.#fn(n.value);
-        return is_some(v) ? { done: false, value: v } : done();
+        const elt = this.#fn(n.value);
+        return is_some(elt) ? item(elt) : done();
     }
 
 }
@@ -1361,14 +1360,14 @@ class Zip<K, V> extends DoubleEndedIterator<[K, V]> {
         const k = this.#iter.next()
         const v = this.#other.next()
 
-        return (k.done || v.done) ? done() : { done: false, value: [k.value, v.value] }
+        return (k.done || v.done) ? done() : item([k.value, v.value] as [K, V])
     }
 
     override next_back(): IteratorResult<[K, V]> {
         const k = this.#iter.next_back()
         const v = this.#other.next_back()
 
-        return (k.done || v.done) ? done<[K, V]>() : { done: false, value: [k.value, v.value] }
+        return (k.done || v.done) ? done<[K, V]>() : item([k.value, v.value] as [K, V])
     }
 }
 
@@ -1386,7 +1385,7 @@ class Once<T> extends DoubleEndedIterator<T> {
     override next(): IteratorResult<T> {
         const taken = this.#taken;
         this.#taken = true;
-        return taken ? done() : { done: false, value: this.#item }
+        return taken ? done() : item(this.#item);
     }
 
     override next_back(): IteratorResult<T> {
@@ -1415,7 +1414,7 @@ class OnceWith<T> extends DoubleEndedIterator<T> {
     override next(): IteratorResult<T> {
         const taken = this.#taken;
         this.#taken = true;
-        return taken ? done() : { done: false, value: this.#fn() };
+        return taken ? done() : item(this.#fn());
     }
 
     override next_back(): IteratorResult<T> {
@@ -1444,11 +1443,11 @@ class Repeat<T> extends DoubleEndedIterator<T> {
     }
 
     override next(): IteratorResult<T> {
-        return { done: false, value: this.#element }
+        return item(this.#element)
     }
 
     override next_back(): IteratorResult<T> {
-        return { done: false, value: this.#element }
+        return item(this.#element)
     }
 
     override advance_by(_: number): Result<Ok, NonZeroUsize> {
@@ -1491,11 +1490,11 @@ class RepeatWith<T> extends DoubleEndedIterator<T> {
     }
 
     override next(): IteratorResult<T> {
-        return { done: false, value: this.#gen() }
+        return item(this.#gen())
     }
 
     override next_back(): IteratorResult<T> {
-        return { done: false, value: this.#gen() }
+        return item(this.#gen())
     }
 
     override advance_by(_: number): Result<Ok, NonZeroUsize> {
@@ -1532,7 +1531,6 @@ export function repeat_with<T>(fn: () => T) {
 }
 
 // * --- common Iterators ---
-
 export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
     #iterable: ArrayLikeType<T>;
     #index: number;
@@ -1551,8 +1549,8 @@ export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
             return done();
         }
 
-        const item = this.#iterable[this.#index];
-        return is_some(item) ? { done: false, value: item } : done();
+        const elt = this.#iterable[this.#index];
+        return is_some(elt) ? item(elt) : done();
     }
 
     next_back(): IteratorResult<T> {
@@ -1560,11 +1558,11 @@ export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
         if (this.#back_index <= this.#index) {
             return done<T>();
         }
-        const item = this.#iterable[this.#back_index]
-        return is_some(item) ? { done: false, value: item } : done();
+        const elt = this.#iterable[this.#back_index]
+        return is_some(elt) ? item(elt) : done();
     }
 
-    override advance_by(n: number): Result<undefined, NonZeroUsize> {
+    override advance_by(n: number): Result<Ok, NonZeroUsize> {
         if (n === 0) {
             return;
         }
@@ -1574,7 +1572,7 @@ export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
         return non_zero_usize(this.len() - m)
     }
 
-    override advance_back_by(n: number): Result<undefined, NonZeroUsize> {
+    override advance_back_by(n: number): Result<Ok, NonZeroUsize> {
         if (n === 0) {
             return;
         }
@@ -1633,7 +1631,7 @@ export class Range extends ExactSizeDoubleEndedIterator<number> {
             return done()
         }
 
-        return { done: false, value: this.#index }
+        return item(this.#index);
     }
 
     next_back(): IteratorResult<number> {
@@ -1642,7 +1640,7 @@ export class Range extends ExactSizeDoubleEndedIterator<number> {
             return done()
         }
 
-        return { done: false, value: this.#back_index }
+        return item(this.#back_index);
     }
 
     override size_hint(): SizeHint<number, number> {
@@ -1655,7 +1653,7 @@ export class Range extends ExactSizeDoubleEndedIterator<number> {
     }
 }
 /**
-* @summary  Creates a [`DoubleEndedIterator`] from start ... end.
+* Creates a [`DoubleEndedIterator`] from start ... end.
 * @throws This function **throws** a [`RangeError`] if `start > end`.
 */
 export function range(start: number, end: number): Range {
@@ -1718,9 +1716,7 @@ class Drain<T> extends ExactSizeDoubleEndedIterator<T> {
 }
 
 /**
- * @description
-* Removes the specified range from the array in bulk, returning all removed elements as an iterator. If the iterator is dropped before being fully consumed, it drops the remaining removed elements.
-* The returned iterator keeps a mutable borrow on the array to optimize its implementation.
+* Removes the specified range from the array in bulk, returning all removed elements as an iterator. If the iterator is dropped before being fully consumed, it drops the remaining removed elements. The returned iterator keeps a mutable borrow on the array to optimize its implementation.
 * @throws if the starting point is greater than the end point or if the end point is greater than the length of the array.
  */
 export function drain<T>(array: T[], r: Range): Drain<T>;

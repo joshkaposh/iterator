@@ -2,9 +2,13 @@ import { is_arraylike, is_primitive } from "../util";
 import { ArrayLike, DoubleEndedIterator, ExactSizeDoubleEndedIterator, FusedDoubleEndedIterator, once, once_with, repeat, repeat_with, range, Range, drain } from "./double-ended-iterator";
 import { Generator, Iterator, FusedIterator, ExactSizeIterator, successors, from_fn } from "./iterator";
 import type { IterInputType, Iter, ArrayLikeType, Item, GeneratorType } from '../types'
-import { iter_type, done, map_next } from "../shared";
+import { iter_type, done, map_next, item } from "../shared";
 
 
+/**
+ * Primary way to create an Iterator. Iterators can also be created by functions provided by the library, or classes extending `Iterator`
+ * @returns Returns an Iterator with 
+ */
 export default function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
     const ty = iter_type(iterable);
     if (ty === 'iter') {
@@ -48,6 +52,7 @@ export {
 
     is_arraylike,
     done,
+    item,
     map_next,
 
     Iterator,

@@ -10,7 +10,7 @@ export function done<TReturn>(): IteratorResult<TReturn> {
     }
 }
 
-export function iter_item<T>(value: T): IteratorYieldResult<T> {
+export function item<T>(value: T): IteratorYieldResult<T> {
     return {
         done: false,
         value: value

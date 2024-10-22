@@ -1,5 +1,5 @@
 import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt } from "joshkaposh-option";
-import { NonZeroUsize, done, iter_item, non_zero_usize } from "../shared";
+import { NonZeroUsize, done, item, non_zero_usize } from "../shared";
 import type { AsyncIteratorInputType, Item, SizeHint } from "../types";
 import { async_iter } from ".";
 
@@ -374,7 +374,7 @@ export function from_iterable<T>(into_iter: () => Generator<T>, callback: (value
         const it = into_iter();
         return async () => {
             const n = it.next();
-            return n.done ? done() : iter_item(await callback(n.value))
+            return n.done ? done() : item(await callback(n.value))
         }
     })
 }
@@ -410,7 +410,7 @@ class ArrayChunks<T> extends AsyncIterator<T[]> {
             return done();
         }
 
-        return iter_item(chunk) as IteratorResult<T[]>;
+        return item(chunk) as IteratorResult<T[]>;
     }
 }
 
@@ -480,7 +480,7 @@ class Enumerate<T> extends AsyncIterator<[number, T]> {
     async next() {
         this.#index++;
         const n = await this.#iter.next();
-        return !n.done ? iter_item([this.#index, n.value] as [number, T]) : done<[number, T]>()
+        return !n.done ? item([this.#index, n.value] as [number, T]) : done<[number, T]>()
     }
 }
 
@@ -535,7 +535,7 @@ class FilterMap<A, B> extends AsyncIterator<B> {
         while (!(n = await this.#iter.next()).done) {
             const elt = this.#fn(n.value);
             if (is_some(elt)) {
-                return iter_item(elt);
+                return item(elt);
             }
         }
         return done()
@@ -609,7 +609,7 @@ class FlatMap<A, B> extends AsyncIterator<B> {
             return done();
         }
 
-        return n.done ? done() : iter_item(await this.#f(n.value))
+        return n.done ? done() : item(await this.#f(n.value))
     }
 
     override into_iter(): AsyncIterator<B> {
@@ -699,7 +699,7 @@ class Intersperse<T> extends AsyncIterator<T> {
         const p = await this.#iter.peek()
         if (this.#needs_sep && !p.done) {
             this.#needs_sep = false;
-            return iter_item(this.#separator)
+            return item(this.#separator)
         } else {
             this.#needs_sep = true;
             return await this.#iter.next();
@@ -737,7 +737,7 @@ class IntersperseWith<T> extends ExactSizeAsyncIterator<T> {
         const p = await this.#iter.peek();
         if (this.#needs_sep && !p.done) {
             this.#needs_sep = false;
-            return iter_item(await this.#gen())
+            return item(await this.#gen())
         } else {
             this.#needs_sep = true;
             return await this.#iter.next();
@@ -765,7 +765,7 @@ class Map<A, B> extends AsyncIterator<B> {
 
     async next() {
         const n = await this.#iter.next();
-        return !n.done ? iter_item(await this.#callback(n.value)) : done<B>();
+        return !n.done ? item(await this.#callback(n.value)) : done<B>();
     }
 }
 
@@ -789,7 +789,7 @@ class MapWhile<A, B> extends AsyncIterator<B> {
             return done();
         }
         const v = this.#fn(n.value);
-        return is_some(v) ? iter_item(v) : done();
+        return is_some(v) ? item(v) : done();
     }
 }
 
@@ -1280,7 +1280,7 @@ class Zip<K, V> extends AsyncIterator<[K, V]> {
         const k = await this.#iter.next()
         const v = await this.#other.next()
 
-        return (k.done || v.done) ? done() : iter_item([k.value, v.value] as [K, V])
+        return (k.done || v.done) ? done() : item([k.value, v.value] as [K, V])
     }
 }
 //* --- free standing functions ---
@@ -1301,13 +1301,13 @@ class AsyncSuccessors<T> extends AsyncIterator<T> {
     }
 
     override async next(): Promise<IteratorResult<T>> {
-        const item = this.#next
-        if (!is_some(item)) {
+        const ni = this.#next
+        if (!is_some(ni)) {
             return done();
         }
-        const n = await this.#succ(item);
+        const n = await this.#succ(ni);
         this.#next = n;
-        return iter_item(item)
+        return item(ni)
     }
 
     override size_hint(): [number, Option<number>] {
@@ -1332,7 +1332,7 @@ class AsyncFromFn<T> extends AsyncIterator<T> {
 
     override async next(): Promise<IteratorResult<T>> {
         const n = await this.#fn();
-        return is_some(n) ? iter_item(n) : done();
+        return is_some(n) ? item(n) : done();
     }
 }
 
@@ -1365,7 +1365,7 @@ export class AsyncGenerator<T> extends AsyncIterator<T> {
 
     override async next(): Promise<IteratorResult<T, any>> {
         const n = await this.#iter.next();
-        return n.done ? done() : iter_item(await this.#callback(n.value))
+        return n.done ? done() : item(await this.#callback(n.value))
     }
 }
 

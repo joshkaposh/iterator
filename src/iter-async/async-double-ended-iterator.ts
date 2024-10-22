@@ -1,7 +1,7 @@
 import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt, } from "joshkaposh-option";
 import { assert } from "../util";
 import { AsyncIterator } from "./async-iterator";
-import { NonZeroUsize, done, iter_item, non_zero_usize } from "../shared";
+import { NonZeroUsize, done, item, non_zero_usize } from "../shared";
 import { async_iter, from_async_fn } from ".";
 import type { AsyncDoubleEndedIteratorInputType, SizeHint, Item } from "../types";
 
@@ -300,13 +300,13 @@ class Enumerate<T> extends AsyncDoubleEndedIterator<[number, T]> {
     async next() {
         this.#index++;
         const n = await this.#iter.next();
-        return !n.done ? iter_item([this.#index, n.value] as [number, T]) : done<[number, T]>()
+        return !n.done ? item([this.#index, n.value] as [number, T]) : done<[number, T]>()
     }
 
     async next_back() {
         this.#index++;
         const n = await this.#iter.next_back();
-        return !n.done ? iter_item([this.#index, n.value] as [number, T]) : done<[number, T]>()
+        return !n.done ? item([this.#index, n.value] as [number, T]) : done<[number, T]>()
     }
 
 }
@@ -480,7 +480,7 @@ class FlatMap<A, B> extends AsyncDoubleEndedIterator<B> {
             return done();
         }
 
-        return n.done ? done() : iter_item(this.#f(n.value))
+        return n.done ? done() : item(this.#f(n.value))
     }
 
     override async next_back(): Promise<IteratorResult<B>> {
@@ -489,7 +489,7 @@ class FlatMap<A, B> extends AsyncDoubleEndedIterator<B> {
             return done();
         }
 
-        return n.done ? done() : iter_item(this.#f(n.value))
+        return n.done ? done() : item(this.#f(n.value))
 
     }
 }
@@ -537,12 +537,12 @@ class Map<A, B> extends AsyncDoubleEndedIterator<B> {
 
     async next() {
         const n = await this.#iter.next();
-        return !n.done ? iter_item(await this.#callback(n.value)) : done<B>();
+        return !n.done ? item(await this.#callback(n.value)) : done<B>();
     }
 
     async next_back() {
         const n = await this.#iter.next_back();
-        return !n.done ? iter_item(await this.#callback(n.value)) : done<B>();
+        return !n.done ? item(await this.#callback(n.value)) : done<B>();
     }
 }
 
@@ -566,7 +566,7 @@ class MapWhile<A, B> extends AsyncDoubleEndedIterator<B> {
             return done();
         }
         const v = this.#fn(n.value);
-        return is_some(v) ? iter_item(v) : done();
+        return is_some(v) ? item(v) : done();
     }
 
     override async next_back(): Promise<IteratorResult<B>> {
@@ -575,7 +575,7 @@ class MapWhile<A, B> extends AsyncDoubleEndedIterator<B> {
             return done();
         }
         const v = this.#fn(n.value);
-        return is_some(v) ? iter_item(v) : done();
+        return is_some(v) ? item(v) : done();
     }
 
 }
@@ -1299,14 +1299,14 @@ class Zip<K, V> extends AsyncDoubleEndedIterator<[K, V]> {
         const k = await this.#iter.next()
         const v = await this.#other.next()
 
-        return (k.done || v.done) ? done<[K, V]>() : iter_item([k.value, v.value] as [K, V])
+        return (k.done || v.done) ? done<[K, V]>() : item([k.value, v.value] as [K, V])
     }
 
     override async next_back(): Promise<IteratorResult<[K, V]>> {
         const k = await this.#iter.next_back()
         const v = await this.#other.next_back()
 
-        return (k.done || v.done) ? done<[K, V]>() : iter_item([k.value, v.value] as [K, V])
+        return (k.done || v.done) ? done<[K, V]>() : item([k.value, v.value] as [K, V])
     }
 }
 
@@ -1322,7 +1322,7 @@ export class AsyncOnce<T> extends AsyncDoubleEndedIterator<T> {
     override async next(): Promise<IteratorResult<T>> {
         const taken = this.#taken;
         this.#taken = true;
-        return taken ? done() : iter_item(this.#item);
+        return taken ? done() : item(this.#item);
     }
 
     override async next_back(): Promise<IteratorResult<T>> {
@@ -1347,7 +1347,7 @@ export class AsyncOnceWith<T> extends AsyncDoubleEndedIterator<T> {
     override async next(): Promise<IteratorResult<T>> {
         const taken = this.#taken;
         this.#taken = true;
-        return taken ? done() : iter_item(await this.#fn());
+        return taken ? done() : item(await this.#fn());
     }
 
     override async next_back(): Promise<IteratorResult<T>> {
@@ -1372,11 +1372,11 @@ export class AsyncRepeatWith<T> extends AsyncDoubleEndedIterator<T> {
     }
 
     override async next(): Promise<IteratorResult<T>> {
-        return iter_item(await this.#gen())
+        return item(await this.#gen())
     }
 
     override async next_back(): Promise<IteratorResult<T>> {
-        return iter_item(await this.#gen())
+        return item(await this.#gen())
     }
 
     override async advance_by(_: number): Promise<Result<Ok, NonZeroUsize>> {
@@ -1427,8 +1427,8 @@ export class AsyncArraylike<T> extends ExactSizeAsyncDoubleEndedIterator<T> {
             return done();
         }
 
-        const item = this.#iter[this.#index];
-        return is_some(item) ? iter_item(await this.#promise(item)) : done();
+        const n = this.#iter[this.#index];
+        return is_some(n) ? item(await this.#promise(n)) : done();
     }
 
     async next_back(): Promise<IteratorResult<T>> {
@@ -1436,8 +1436,8 @@ export class AsyncArraylike<T> extends ExactSizeAsyncDoubleEndedIterator<T> {
         if (this.#back_index <= this.#index) {
             return done();
         }
-        const item = this.#iter[this.#back_index];
-        return is_some(item) ? iter_item(await this.#promise(item)) : done();
+        const n = this.#iter[this.#back_index];
+        return is_some(n) ? item(await this.#promise(n)) : done();
     }
 
     override async eq(other: ExactSizeAsyncDoubleEndedIterator<T>): Promise<boolean> {
