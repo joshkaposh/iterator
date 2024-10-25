@@ -1,7 +1,6 @@
 import { type None, type Option, is_none, is_some } from "joshkaposh-option";
 import type { Primitive } from "./types";
 
-
 export type Orderable<T> = T extends string ? T :
     T extends number ? T :
     T extends { [Symbol.toPrimitive](): Option<string | number | boolean> } ? T :
@@ -43,28 +42,26 @@ export type Mut<T> = {
 }
 
 export function is_primitive(value: unknown): value is Primitive {
-
-    const none = is_none(value)
-    if (none) {
+    if (is_none(value)) {
         return true
+    }
+
+    const ty = typeof value;
+    if (ty === 'number') {
+        return isNaN(value as number) || true
     } else {
-        const ty = typeof value;
-        if (ty === 'number') {
-            return isNaN(value as number) || true
-        } else {
-            return ty === 'bigint' || ty === 'boolean' || ty === 'string' || ty === 'symbol'
-        }
+        return ty === 'bigint' || ty === 'boolean' || ty === 'string' || ty === 'symbol'
     }
 }
 
-export function is_arraylike<T>(obj?: unknown): obj is ArrayLike<T> {
-    // @ts-expect-error
-    return typeof obj !== 'function' && (typeof obj?.length === 'number' && obj.length >= 0)
+export function is_arraylike<T>(obj?: { length?: number }): obj is ArrayLike<T> {
+    return typeof obj !== 'function' && (typeof obj?.length === 'number')
 }
-// @ts-expect-error
-export function unused<T>(...args: any[]): T { }
+export function unused<T>(...args: any[]): T {
+    return args as T
+}
 
-export function TODO<T>(msg?: string, ...unused_vars: any[]): T {
+export function TODO<T>(msg: string, ...unused_vars: any[]): T {
     unused(unused_vars)
     throw new Error(`Not implemented: ${msg}`)
 }

@@ -1,12 +1,12 @@
 import { Iterator, is_arraylike } from "./iter";
 import { AsyncIterator } from "./iter-async";
-import { Ok, type Result, ErrorExt } from "joshkaposh-option";
+import { ErrorExt } from "joshkaposh-option";
 import { IterInputType } from "./types";
 
-export function done<TReturn>(): IteratorResult<TReturn> {
+export function done<T>(): IteratorResult<T> {
     return {
         done: true,
-        value: undefined as TReturn
+        value: undefined as T
     }
 }
 
@@ -36,11 +36,4 @@ export class NonZeroUsize extends ErrorExt<number> {
     constructor(err_data: number, options?: ErrorOptions) {
         super(err_data, `Expected ${err_data} to be NonZeroSize`, options)
     }
-}
-
-export function non_zero_usize<N extends number>(n: N): Result<Ok, NonZeroUsize> {
-    if (n <= 0) {
-        return new NonZeroUsize(n)
-    }
-    return
 }

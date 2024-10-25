@@ -374,7 +374,8 @@ test('free_standing_functions', () => {
 
     const s = successors(2, (v) => v < Math.pow(2, 5) ? v * v : null)
     expect(s.collect()).toEqual([2, 4, 16, 256])
-    const o = once(1)
+    const o = once(1);
+
     assert(o.next().value === 1)
     assert(o.next().value === undefined)
     assert(o.into_iter().next().value === 1)

@@ -1,7 +1,7 @@
-import { DoubleEndedIterator, ExactSizeDoubleEndedIterator } from "./iter/double-ended-iterator";
-import { ExactSizeIterator, Iterator } from "./iter/iterator";
-import { AsyncDoubleEndedIterator, ExactSizeAsyncDoubleEndedIterator } from "./iter-async/async-double-ended-iterator";
-import { AsyncIterator, ExactSizeAsyncIterator } from "./iter-async/async-iterator";
+import type { DoubleEndedIterator, ExactSizeDoubleEndedIterator } from "./iter/base/double-ended-iterator";
+import type { ExactSizeIterator, Iterator } from "./iter/base/iterator";
+import type { AsyncDoubleEndedIterator, ExactSizeAsyncDoubleEndedIterator } from "./iter-async/async-double-ended-iterator";
+import type { AsyncIterator, ExactSizeAsyncIterator } from "./iter-async/async-iterator";
 import type { Option } from "joshkaposh-option";
 
 export type ArrayLikeType<T> = ArrayLike<T>;

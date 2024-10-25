@@ -1,13 +1,14 @@
 import { is_arraylike, is_primitive } from "../util";
-import { ArrayLike, DoubleEndedIterator, ExactSizeDoubleEndedIterator, FusedDoubleEndedIterator, range, Range, drain } from "./double-ended-iterator";
-import { Iterator, Generator, from_fn, FusedIterator, ExactSizeIterator } from "./iterator";
+import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, FusedDoubleEndedIterator } from "./base/double-ended-iterator";
+import { Iterator, from_fn, FusedIterator, ExactSizeIterator } from "./base/iterator";
+import { Generator, ArrayLike, range, Range, drain, Successors, Once, OnceWith, Repeat, RepeatWith } from './common'
 import type { IterInputType, Iter, ArrayLikeType, Item, GeneratorType } from '../types'
-import { iter_type, done, item, NonZeroUsize } from "../shared";
-import { is_some, Ok, Option, Result } from "joshkaposh-option";
+import { iter_type, done, item } from "../shared";
+import { Option } from "joshkaposh-option";
 
 /**
  * Primary way to create an Iterator. Iterators can also be created by functions provided by the library, or classes extending `Iterator`
- * @returns Returns an Iterator with 
+ * @returns Returns an Iterator 
  */
 export default function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
     const ty = iter_type(iterable);
@@ -31,182 +32,10 @@ export default function iter<It extends IterInputType<any>>(iterable: It): Iter<
 
 // * --- Free standing functions ---
 
-class Successors<T> extends Iterator<T> {
-    #next: Option<T>;
-    #first: Option<T>;
-    #succ: (value: T) => Option<T>;
-    constructor(first: Option<T>, succ: (value: T) => Option<T>) {
-        super()
-        this.#first = first;
-        this.#next = first;
-        this.#succ = succ;
-    }
-
-    override into_iter(): Iterator<T> {
-        this.#next = this.#first;
-        return this;
-    }
-
-    override next(): IteratorResult<T> {
-        const next = this.#next
-        if (!is_some(next)) {
-            return done();
-        }
-        const value = this.#succ(next);
-        this.#next = value;
-        return item(next);
-    }
-
-    override size_hint(): [number, Option<number>] {
-        return is_some(this.#next) ? [1, null] : [0, 0]
-    }
-}
-
-class Once<T> extends DoubleEndedIterator<T> {
-    #item: T;
-    #taken: boolean;
-    constructor(value: T) {
-        super()
-        this.#item = value;
-        this.#taken = false;
-    }
-
-    override next(): IteratorResult<T> {
-        const taken = this.#taken;
-        this.#taken = true;
-        return taken ? done() : item(this.#item);
-    }
-
-    override next_back(): IteratorResult<T> {
-        return this.next();
-    }
-
-    override into_iter(): DoubleEndedIterator<T> {
-        this.#taken = false;
-        return this;
-    }
-}
-
-class OnceWith<T> extends DoubleEndedIterator<T> {
-    #fn: () => T;
-    #taken: boolean
-    constructor(fn: () => T) {
-        super()
-        this.#fn = fn;
-        this.#taken = false;
-    }
-
-    override next(): IteratorResult<T> {
-        const taken = this.#taken;
-        this.#taken = true;
-        return taken ? done() : item(this.#fn());
-    }
-
-    override next_back(): IteratorResult<T> {
-        return this.next();
-    }
-
-    override into_iter(): DoubleEndedIterator<T> {
-        this.#taken = false;
-        return this;
-    }
-}
-
-class Repeat<T> extends DoubleEndedIterator<T> {
-    #element: T;
-    constructor(value: T) {
-        super()
-        this.#element = value;
-    }
-
-    override into_iter(): DoubleEndedIterator<T> {
-        return this
-    }
-
-    override next(): IteratorResult<T> {
-        return item(this.#element)
-    }
-
-    override next_back(): IteratorResult<T> {
-        return item(this.#element)
-    }
-
-    override advance_by(_: number): Result<Ok, NonZeroUsize> {
-        return undefined as Ok
-    }
-
-    override advance_back_by(_: number): Result<Ok, NonZeroUsize> {
-        return undefined as Ok
-    }
-
-    override count(): number {
-        while (true) { }
-    }
-
-    override last(): Option<T> {
-        while (true) { }
-    }
-
-    override nth(_: number): IteratorResult<T> {
-        return this.next();
-    }
-
-    override nth_back(_: number): IteratorResult<T> {
-        return this.next_back();
-    }
-
-    override size_hint(): [number, Option<number>] {
-        return [Number.MAX_SAFE_INTEGER, null]
-    }
-}
-
-class RepeatWith<T> extends DoubleEndedIterator<T> {
-    #gen: () => T;
-    constructor(gen: () => T) {
-        super();
-        this.#gen = gen
-    }
-
-    override next(): IteratorResult<T> {
-        return item(this.#gen())
-    }
-
-    override next_back(): IteratorResult<T> {
-        return item(this.#gen())
-    }
-
-    override advance_by(_: number): Result<Ok, NonZeroUsize> {
-        return undefined as Ok
-    }
-
-    override advance_back_by(_: number): Result<Ok, NonZeroUsize> {
-        return undefined as Ok
-    }
-
-    override count(): number {
-        while (true) { }
-    }
-
-    override last(): Option<T> {
-        while (true) { }
-    }
-
-    override nth(_: number): IteratorResult<T> {
-        return this.next();
-    }
-
-    override nth_back(_: number): IteratorResult<T> {
-        return this.next_back();
-    }
-
-    override size_hint(): [number, Option<number>] {
-        return [Number.MAX_SAFE_INTEGER, null]
-    }
-}
-
 iter.of = function <T>(...t: T[]): ExactSizeDoubleEndedIterator<T> {
-    return new ArrayLike(t);
+    return new ArrayLike(t) as unknown as ExactSizeDoubleEndedIterator<T>;
 }
+
 /**
  * 
  * @summary 

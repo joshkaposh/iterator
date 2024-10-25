@@ -1,8 +1,8 @@
-import { iter } from ".";
+import { iter } from "..";
 import { type Err, type Ok, type Option, type Result, is_error, is_some, ErrorExt } from "joshkaposh-option";
-import { done, NonZeroUsize, non_zero_usize, item } from "../shared";
-import type { IteratorInputType, Item, SizeHint, GeneratorType, IterInputType } from '../types';
-import type { Orderable } from "../util";
+import { done, item, NonZeroUsize } from "../../shared";
+import type { IteratorInputType, Item, SizeHint, IterInputType } from '../../types';
+import type { Orderable } from "../../util";
 
 type FlatType<T> = Iterator<Iterator<T>>;
 
@@ -1317,7 +1317,7 @@ class Take<T> extends Iterator<T> {
         const rem = !res ? 0 : res.get()
         const advanced = min - rem;
         this.#n -= advanced;
-        return non_zero_usize(n - advanced)
+        return new NonZeroUsize(n - advanced)
     }
 
 }
@@ -1458,26 +1458,6 @@ class Zip<K, V> extends Iterator<[K, V]> {
         const v = this.#other.next()
 
         return (k.done || v.done) ? done() : item([k.value, v.value] as [K, V])
-    }
-}
-
-// accepts any () => { next(): IteratorResult<T> }
-export class Generator<T> extends Iterator<T> {
-    #into_iter: () => GeneratorType<T>;
-    #iter: GeneratorType<T>;
-    constructor(into_iter: () => GeneratorType<T>) {
-        super();
-        this.#into_iter = into_iter;
-        this.#iter = into_iter();
-    }
-
-    override next(): IteratorResult<T> {
-        return this.#iter.next()
-    }
-
-    override into_iter(): Generator<T> {
-        this.#iter = this.#into_iter();
-        return this
     }
 }
 
