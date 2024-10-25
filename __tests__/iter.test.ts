@@ -745,12 +745,17 @@ test('spread operator', () => {
 })
 
 test('once', () => {
-    // const o = iter.once(0);
+    const o = iter.once(0);
+    const chain = o.chain([1, 2, 3, 4]);
 
-    // const chain = o.chain([1, 2, 3, 4]);
+    expect(chain.collect()).toEqual([0, 1, 2, 3, 4])
+    expect(chain.collect()).toEqual([])
+    expect(chain.into_iter().collect()).toEqual([0, 1, 2, 3, 4])
+})
 
-    // expect(chain.collect()).toEqual([0, 1, 2, 3, 4])
-    // expect(chain.collect()).toEqual([])
-    // expect(chain.into_iter().collect()).toEqual([0, 1, 2, 3, 4])
+test('collect', () => {
+    expect(iter([1, 2, 2, 3, 3, 3]).collect(Set)).toEqual(new Set([1, 2, 3]));
+    expect(iter([[1, 1], [2, 2], [3, 3]]).collect(Map)).toEqual(new Map([[1, 1], [2, 2], [3, 3]]))
 
+    expect(iter([1, 2, 3]).collect(Array)).toEqual([1, 2, 3])
 })
