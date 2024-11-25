@@ -1,5 +1,4 @@
 import { Iterator, is_arraylike } from "./iter";
-import { AsyncIterator } from "./iter-async";
 import { ErrorExt } from "joshkaposh-option";
 import { IterInputType } from "./types";
 
@@ -18,9 +17,9 @@ export function item<T>(value: T): IteratorYieldResult<T> {
 }
 
 export function iter_type<It extends IterInputType<any>>(iterable: It) {
-    if (iterable instanceof Iterator || iterable instanceof AsyncIterator) {
+    if (iterable instanceof Iterator) {
         return 'iter'
-    } else if (is_arraylike(iterable)) {
+    } else if (is_arraylike(iterable as any)) {
         return 'arraylike'
         // @ts-expect-error
     } else if (iterable && (iterable[Symbol.iterator] || iterable[Symbol.asyncIterator])) {
