@@ -6,11 +6,15 @@ export class Successors<T> extends Iterator<T> {
     #next: Option<T>;
     #first: Option<T>;
     #succ: (value: T) => Option<T>;
-    constructor(first: Option<T>, succ: (value: T) => Option<T>) {
+    constructor(first: Option<T>, succ: (value: T) => Option<T>, next: Option<T> = first) {
         super()
         this.#first = first;
-        this.#next = first;
+        this.#next = next;
         this.#succ = succ;
+    }
+
+    override clone(): Successors<T> {
+        return new Successors(this.#first, this.#succ, this.#next)
     }
 
     override into_iter(): Iterator<T> {

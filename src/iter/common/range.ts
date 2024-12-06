@@ -8,12 +8,16 @@ export class Range extends ExactSizeDoubleEndedIterator<number> {
     #index: number;
     #back_index: number;
 
-    constructor(start: number, end: number) {
+    constructor(start: number, end: number, index = start - 1, back_index = end) {
         super();
         this.start = start;
         this.end = end;
-        this.#index = start - 1;
-        this.#back_index = end;
+        this.#index = index;
+        this.#back_index = back_index;
+    }
+
+    override clone(): Range {
+        return new Range(this.start, this.end, this.#index, this.#back_index)
     }
 
     override into_iter(): ExactSizeDoubleEndedIterator<number> {

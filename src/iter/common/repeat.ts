@@ -1,12 +1,17 @@
 import { Ok, Option, Result } from "joshkaposh-option";
 import { DoubleEndedIterator } from "../base/double-ended-iterator";
 import { item, NonZeroUsize } from "../../shared";
+import { Iterator } from "../base/iterator";
 
 export class Repeat<T> extends DoubleEndedIterator<T> {
     #elt: T;
     constructor(value: T) {
         super()
         this.#elt = value;
+    }
+
+    override clone(): Repeat<T> {
+        return new Repeat(this.#elt);
     }
 
     override into_iter(): DoubleEndedIterator<T> {
@@ -56,6 +61,10 @@ export class RepeatWith<T> extends DoubleEndedIterator<T> {
     constructor(fn: () => T) {
         super();
         this.#fn = fn
+    }
+
+    override clone(): RepeatWith<T> {
+        return new RepeatWith(this.#fn);
     }
 
     override next(): IteratorResult<T> {

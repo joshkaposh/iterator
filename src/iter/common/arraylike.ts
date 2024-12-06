@@ -2,17 +2,22 @@ import { is_some, Ok, Result } from "joshkaposh-option";
 import { done, item, NonZeroUsize } from "../../shared";
 import { ArrayLikeType } from "../../types";
 import { ExactSizeDoubleEndedIterator } from "../base/double-ended-iterator";
+import { Iterator } from "../base/iterator";
 
 export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
     #iterable: ArrayLikeType<T>;
     #index: number;
     #back_index: number;
 
-    constructor(iterable: ArrayLikeType<T>) {
+    constructor(iterable: ArrayLikeType<T>, index = -1, back_index = iterable.length) {
         super()
         this.#iterable = iterable;
-        this.#index = -1;
-        this.#back_index = iterable.length;
+        this.#index = index;
+        this.#back_index = back_index;
+    }
+
+    override clone(): ArrayLike<T> {
+        return new ArrayLike(this.#iterable, this.#index, this.#back_index)
     }
 
     next(): IteratorResult<T> {

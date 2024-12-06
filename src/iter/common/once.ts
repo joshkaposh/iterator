@@ -1,13 +1,18 @@
 import { done, item } from "../../shared";
 import { ExactSizeDoubleEndedIterator } from "../base/double-ended-iterator";
+import { Iterator } from "../base/iterator";
 
 export class Once<T> extends ExactSizeDoubleEndedIterator<T> {
     #elt: T;
     #taken: boolean;
-    constructor(value: T) {
+    constructor(value: T, taken = false) {
         super()
         this.#elt = value;
-        this.#taken = false;
+        this.#taken = taken;
+    }
+
+    override clone(): Once<T> {
+        return new Once(this.#elt, this.#taken)
     }
 
     override next(): IteratorResult<T> {
@@ -34,10 +39,14 @@ export class Once<T> extends ExactSizeDoubleEndedIterator<T> {
 export class OnceWith<T> extends ExactSizeDoubleEndedIterator<T> {
     #fn: () => T;
     #taken: boolean
-    constructor(fn: () => T) {
+    constructor(fn: () => T, taken = false) {
         super()
         this.#fn = fn;
-        this.#taken = false;
+        this.#taken = taken;
+    }
+
+    override clone(): OnceWith<T> {
+        return new OnceWith(this.#fn, this.#taken)
     }
 
     override next(): IteratorResult<T> {

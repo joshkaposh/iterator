@@ -14,6 +14,10 @@ export abstract class Iterator<T> {
     abstract next(): IteratorResult<T>;
     abstract into_iter(): Iterator<T>;
 
+    clone(): Iterator<T> {
+        return this;
+    }
+
     /**
      * Advances the `Iterator` by `N` elements.  Note that calling advance_by(0) advances the `Iterator` by one element.
      * @param n {number} any non-negative integer
@@ -526,9 +530,11 @@ export abstract class Iterator<T> {
 }
 
 export interface ExactSizeIterator<T> {
+    clone(): ExactSizeIterator<T>
     size_hint(): SizeHint<number, number>;
     into_iter(): ExactSizeIterator<T>;
 }
+
 export abstract class ExactSizeIterator<T> extends Iterator<T> {
     len(): number {
         return this.size_hint()[1]
@@ -538,14 +544,22 @@ export abstract class ExactSizeIterator<T> extends Iterator<T> {
     }
 }
 
+export interface FusedIterator<T> {
+    clone(): FusedIterator<T>
+}
+
 export class FusedIterator<T> extends Iterator<T> {
     #done = false;
     #iter: Iterator<T>;
-    constructor(iterable: Iterator<T>) {
+    constructor(iterable: Iterator<T>, done = false) {
         super();
         this.#iter = iterable;
+        this.#done = done;
     }
 
+    override clone(): FusedIterator<T> {
+        return new FusedIterator(this.#iter.clone(), this.#done)
+    }
 
     override into_iter(): Iterator<T> {
         this.#iter.into_iter();
@@ -570,10 +584,15 @@ class ArrayChunks<T> extends Iterator<T[]> {
     #remainder: Option<T[]>
     #n: number;
     #iter: Iterator<T>;
-    constructor(iterable: Iterator<T>, n: number) {
+    constructor(iterable: Iterator<T>, n: number, remainder?: Option<T[]>) {
         super()
         this.#iter = iterable
         this.#n = n;
+        this.#remainder = remainder
+    }
+
+    override clone(): ArrayChunks<T> {
+        return new ArrayChunks(this.#iter.clone(), this.#n, this.#remainder)
     }
 
     into_remainder(): Option<T[]> {
@@ -610,6 +629,10 @@ class Chain<T> extends Iterator<T> {
         this.#other = iter(other) as Iterator<T>;
     }
 
+    override clone(): Iterator<T> {
+        return new Chain(this.#iter.clone(), this.#other.clone())
+    }
+
     override into_iter(): Iterator<T> {
         this.#iter.into_iter();
         this.#other.into_iter();
@@ -627,6 +650,10 @@ class Cycle<T> extends Iterator<T> {
     constructor(iterable: Iterator<T>) {
         super();
         this.#iter = iterable;
+    }
+
+    override clone(): Iterator<T> {
+        return new Cycle(this.#iter.clone())
     }
 
     override into_iter(): Iterator<T> {
@@ -647,11 +674,16 @@ class Cycle<T> extends Iterator<T> {
 }
 
 class Enumerate<T> extends ExactSizeIterator<[number, T]> {
-    #index = -1;
+    #index: number;
     #iter: Iterator<T>;
-    constructor(iterable: Iterator<T>) {
+    constructor(iterable: Iterator<T>, index = -1) {
         super()
         this.#iter = iterable;
+        this.#index = index;
+    }
+
+    override clone(): ExactSizeIterator<[number, T]> {
+        return new Enumerate(this.#iter.clone(), this.#index);
     }
 
     override into_iter(): ExactSizeIterator<[number, T]> {
@@ -670,10 +702,15 @@ class Enumerate<T> extends ExactSizeIterator<[number, T]> {
 class Filter<T> extends Iterator<T> {
     #fn: (value: T) => boolean;
     #iter: Iterator<T>;
+
     constructor(iterable: Iterator<T>, fn: (value: T) => boolean) {
         super()
         this.#iter = iterable;
         this.#fn = fn;
+    }
+
+    override clone(): Iterator<T> {
+        return new Filter(this.#iter.clone(), this.#fn)
     }
 
     override into_iter(): Iterator<T> {
@@ -706,6 +743,10 @@ class FilterMap<A, B> extends Iterator<B> {
         this.#fn = fn;
     }
 
+    override clone(): FilterMap<A, B> {
+        return new FilterMap(this.#iter.clone(), this.#fn)
+    }
+
     override into_iter(): Iterator<B> {
         this.#iter.into_iter();
         return this;
@@ -727,15 +768,31 @@ class FilterMap<A, B> extends Iterator<B> {
 class Flatten<T> extends Iterator<T> {
     #outter: FlatType<T>;
     #inner: Option<Iterator<T>>;
-    constructor(iterable: FlatType<T>) {
+    constructor(outter: FlatType<T>, inner?: Option<Iterator<T>>) {
         super()
-        this.#outter = iterable;
+        this.#outter = outter;
+        this.#inner = inner
     }
 
+    override clone(): Flatten<T> {
+        return new Flatten(this.#outter.clone(), this.#inner?.clone())
+    }
 
     override into_iter(): Iterator<T> {
         this.#outter.into_iter();
         return this
+    }
+
+    override next(): IteratorResult<T> {
+        if (!this.#inner) {
+            const n = this.#outter.next().value;
+            if (!n) {
+                return done()
+            }
+            this.#inner = iter(n) as Iterator<T>;
+        }
+
+        return this.#next_loop()
     }
 
     #next_loop(): IteratorResult<T> {
@@ -758,39 +815,21 @@ class Flatten<T> extends Iterator<T> {
             return n
         }
     }
-
-    override next(): IteratorResult<T> {
-        if (!this.#inner) {
-            const n = this.#outter.next().value;
-            if (!n) {
-                return done()
-            }
-            this.#inner = iter(n) as Iterator<T>;
-        }
-
-        return this.#next_loop()
-    }
 }
 
 class FlatMap<A, B extends Iterator<any>> extends Iterator<Item<B>> {
     #inner: Option<B>;
     #iter: Iterator<A>;
     #fn: (value: A) => Option<B>
-    constructor(it: Iterator<A>, f: (value: A) => Option<B>) {
+    constructor(iterator: Iterator<A>, flat_map: (value: A) => Option<B>, inner?: Option<B>) {
         super()
-        this.#iter = it;
-        this.#fn = f;
+        this.#iter = iterator;
+        this.#fn = flat_map;
+        this.#inner = inner;
     }
 
-    #next_loop() {
-        // ! Safety: next() just initialized inner;
-        const n = this.#inner!.next();
-        if (n.done) {
-            this.#inner = null;
-            return this.next();
-        }
-
-        return n;
+    override clone(): Iterator<Item<B>> {
+        return new FlatMap(this.#iter.clone(), this.#fn, this.#inner);
     }
 
     override next(): IteratorResult<Item<B>> {
@@ -817,6 +856,17 @@ class FlatMap<A, B extends Iterator<any>> extends Iterator<Item<B>> {
         this.#inner = null;
         return this
     }
+
+    #next_loop() {
+        // ! Safety: next() just initialized inner;
+        const n = this.#inner!.next();
+        if (n.done) {
+            this.#inner = null;
+            return this.next();
+        }
+
+        return n;
+    }
 }
 
 class Inspect<T> extends Iterator<T> {
@@ -826,6 +876,10 @@ class Inspect<T> extends Iterator<T> {
         super()
         this.#iter = iterable;
         this.#fn = fn;
+    }
+
+    override clone(): Iterator<T> {
+        return new Inspect(this.#iter.clone(), this.#fn);
     }
 
     override into_iter(): Iterator<T> {
@@ -880,13 +934,17 @@ function intersperse_size_hint<I extends Iterator<any>>(iter: I, needs_sep: bool
 class Intersperse<T> extends Iterator<T> {
     #iter: ReturnType<Iterator<T>['peekable']>;
     #separator: T;
-    #needs_sep = false;
-    constructor(iterable: Iterator<T>, separator: T) {
+    #needs_sep: boolean;
+    constructor(iterable: Iterator<T>, separator: T, needs_sep = false) {
         super()
         this.#iter = iterable.peekable();
         this.#separator = separator;
+        this.#needs_sep = needs_sep;
     }
 
+    override clone(): Iterator<T> {
+        return new Intersperse(this.#iter.clone(), this.#separator, this.#needs_sep)
+    }
 
     override into_iter(): Iterator<T> {
         this.#needs_sep = false;
@@ -916,12 +974,18 @@ class Intersperse<T> extends Iterator<T> {
 
 class IntersperseWith<T> extends Iterator<T> {
     #iter: ReturnType<Iterator<T>['peekable']>;
-    #gen: () => T;
-    #needs_sep = false;
-    constructor(iterable: Iterator<T>, gen: () => T) {
+    #separator: () => T;
+    #needs_sep: boolean;
+    constructor(iterable: Iterator<T>, separator: () => T, needs_sep = false) {
         super()
         this.#iter = iterable.peekable();
-        this.#gen = gen;
+        this.#separator = separator;
+        this.#needs_sep = needs_sep
+    }
+
+
+    override clone(): Iterator<T> {
+        return new IntersperseWith(this.#iter.clone(), this.#separator, this.#needs_sep)
     }
 
     override into_iter(): Iterator<T> {
@@ -933,7 +997,7 @@ class IntersperseWith<T> extends Iterator<T> {
     override next(): IteratorResult<T> {
         if (this.#needs_sep && !this.#iter.peek().done) {
             this.#needs_sep = false;
-            return item(this.#gen());
+            return item(this.#separator());
         } else {
             this.#needs_sep = true;
             return this.#iter.next();
@@ -941,7 +1005,7 @@ class IntersperseWith<T> extends Iterator<T> {
     }
 
     override fold<B>(initial: B, fold: (acc: B, x: T) => B): B {
-        return intersperse_fold(this.#iter, initial, fold, () => this.#gen(), this.#needs_sep)
+        return intersperse_fold(this.#iter, initial, fold, () => this.#separator(), this.#needs_sep)
     }
 }
 
@@ -957,6 +1021,10 @@ class Map<A, B> extends Iterator<B> {
     override into_iter(): Iterator<B> {
         this.#iter.into_iter();
         return this
+    }
+
+    override clone(): Iterator<B> {
+        return new Map(this.#iter.clone(), this.#map);
     }
 
     next(): IteratorResult<B> {
@@ -975,6 +1043,10 @@ class MapWhile<A, B> extends Iterator<B> {
         this.#map = map;
     }
 
+    override clone(): Iterator<B> {
+        return new MapWhile(this.#iter.clone(), this.#map);
+    }
+
     override into_iter(): Iterator<B> {
         this.#iter.into_iter();
         return this
@@ -990,7 +1062,6 @@ class MapWhile<A, B> extends Iterator<B> {
     }
 }
 
-
 class Skip<T> extends ExactSizeIterator<T> {
     #n: number;
     #iter: Iterator<T>
@@ -998,6 +1069,10 @@ class Skip<T> extends ExactSizeIterator<T> {
         super()
         this.#iter = iterable;
         this.#n = n;
+    }
+
+    override clone(): ExactSizeIterator<T> {
+        return new Skip(this.#iter.clone(), this.#n);
     }
 
     override size_hint(): SizeHint<number, number> {
@@ -1102,12 +1177,17 @@ class SkipWhile<T> extends Iterator<T> {
     #iter: Iterator<T>;
     #fn: (value: T) => boolean;
     #needs_skip: boolean;
-    constructor(iter: Iterator<T>, fn: (value: T) => boolean) {
+    constructor(iter: Iterator<T>, fn: (value: T) => boolean, needs_skip = true) {
         super()
         this.#iter = iter;
         this.#fn = fn;
-        this.#needs_skip = true;
+        this.#needs_skip = needs_skip;
     }
+
+    override clone(): Iterator<T> {
+        return new SkipWhile(this.#iter.clone(), this.#fn, this.#needs_skip)
+    }
+
     override next(): IteratorResult<T> {
         if (!this.#needs_skip) {
             return this.#iter.next()
@@ -1133,11 +1213,15 @@ class StepBy<T> extends ExactSizeIterator<T> {
     #iter: Iterator<T>;
     #step: number;
     #first_take: boolean;
-    constructor(iterable: Iterator<T>, step: number) {
+    constructor(iterable: Iterator<T>, step: number, first_take = true) {
         super();
         this.#iter = iterable;
         this.#step = Math.max(step - 1, 0);
-        this.#first_take = true;
+        this.#first_take = first_take;
+    }
+
+    override clone(): ExactSizeIterator<T> {
+        return new StepBy(this.#iter.clone(), this.#step, this.#first_take)
     }
 
     override into_iter(): ExactSizeIterator<T> {
@@ -1258,6 +1342,10 @@ class Take<T> extends Iterator<T> {
         this.#n = n;
     }
 
+    override clone(): Iterator<T> {
+        return new Take(this.#iter.clone(), this.#n);
+    }
+
     override into_iter(): Iterator<T> {
         this.#iter.into_iter();
         return this
@@ -1331,6 +1419,10 @@ class TakeWhile<T> extends Iterator<T> {
         this.#fn = fn;
     }
 
+    override clone(): Iterator<T> {
+        return new TakeWhile(this.#iter.clone(), this.#fn)
+    }
+
     override into_iter(): Iterator<T> {
         this.#iter.into_iter();
         return this
@@ -1353,15 +1445,14 @@ class TakeWhile<T> extends Iterator<T> {
 class Peekable<T> extends Iterator<T> {
     #peeked: Option<Option<IteratorResult<T>>>;
     #iter: Iterator<T>;
-    constructor(iterable: Iterator<T>) {
+    constructor(iterable: Iterator<T>, peeked?: Option<Option<IteratorResult<T>>>) {
         super()
         this.#iter = iterable;
+        this.#peeked = peeked;
     }
 
-    #take() {
-        const peeked = this.#peeked;
-        this.#peeked = null;
-        return peeked;
+    override clone(): Iterator<T> {
+        return new Peekable(this.#iter.clone(), this.#peeked)
     }
 
     override into_iter(): Iterator<T> {
@@ -1434,6 +1525,11 @@ class Peekable<T> extends Iterator<T> {
         return this.#iter.fold(acc, fold);
     }
 
+    #take() {
+        const peeked = this.#peeked;
+        this.#peeked = null;
+        return peeked;
+    }
 }
 
 class Zip<K, V> extends Iterator<[K, V]> {
@@ -1444,6 +1540,10 @@ class Zip<K, V> extends Iterator<[K, V]> {
         super()
         this.#iter = iterable;
         this.#other = iter(other) as Iterator<V>;
+    }
+
+    override clone(): Iterator<[K, V]> {
+        return new Zip(this.#iter.clone(), this.#other.clone())
     }
 
     override into_iter(): Iterator<[K, V]> {
@@ -1471,6 +1571,10 @@ export class FromFn<T> extends Iterator<T> {
     constructor(fn: () => IteratorResult<T>) {
         super()
         this.#fn = fn;
+    }
+
+    override clone(): Iterator<T> {
+        return new FromFn(this.#fn);
     }
 
     override into_iter(): Iterator<T> {
