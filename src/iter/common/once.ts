@@ -1,6 +1,5 @@
 import { done, item } from "../../shared";
 import { ExactSizeDoubleEndedIterator } from "../base/double-ended-iterator";
-import { Iterator } from "../base/iterator";
 
 export class Once<T> extends ExactSizeDoubleEndedIterator<T> {
     #elt: T;

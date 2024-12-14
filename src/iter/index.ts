@@ -1,7 +1,7 @@
 import { is_arraylike, is_primitive } from "../util";
 import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, FusedDoubleEndedIterator } from "./base/double-ended-iterator";
 import { Iterator, from_fn, FusedIterator, ExactSizeIterator } from "./base/iterator";
-import { Generator, ArrayLike, range, Range, drain, Successors, Once, OnceWith, Repeat, RepeatWith } from './common'
+import { Generator, ArrayLike, range, Range, drain, Successors, Once, OnceWith, Repeat, RepeatWith, Empty } from './common'
 import type { IterInputType, Iter, ArrayLikeType, Item, GeneratorType } from '../types'
 import { iter_type, done, item } from "../shared";
 import { Option } from "joshkaposh-option";
@@ -61,27 +61,31 @@ iter.from_fn = from_fn;
 * If 'first' was None, the resulting Iterator will be empty.
  */
 iter.successors = function <T>(first: Option<T>, succ: (value: T) => Option<T>): Successors<T> {
-    return new Successors(first, succ)
+    return new Successors<T>(first, succ)
 }
 iter.once = function <T>(value: T) {
-    return new Once(value)
+    return new Once<T>(value)
 };
 iter.once_with = function <T>(fn: () => T) {
-    return new OnceWith(fn)
+    return new OnceWith<T>(fn)
 };
 iter.repeat = function <T>(value: T) {
-    return new Repeat(value)
+    return new Repeat<T>(value)
 };
 iter.repeat_with = function <T>(fn: () => T) {
-    return new RepeatWith(fn)
+    return new RepeatWith<T>(fn)
 };
+iter.empty = function <T>() {
+    return new Empty<T>()
+}
 
 const {
     once,
     once_with,
     repeat,
     repeat_with,
-    successors
+    successors,
+    empty
 } = iter
 
 export {
@@ -90,6 +94,7 @@ export {
     from_fn,
     once,
     once_with,
+    empty,
     repeat,
     repeat_with,
     successors,
