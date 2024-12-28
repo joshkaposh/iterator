@@ -74,7 +74,6 @@ export abstract class Iterator<T> {
         return new Chain(this, other)
     }
 
-
     //TODO: enable a function to be passed in for cases where more complex initialization is required
     /**
      * collect() is one of the most powerful methods. collect() by default will create an array with the remaining elements.
@@ -316,8 +315,8 @@ export abstract class Iterator<T> {
      * Converts an Iterator<A> into an Iterator<B>.
      * map() calls `f` for each element of the Iterator, yielding the result of the provided function
      */
-    map<B>(f: (value: T) => B): Iterator<B> {
-        return new Map(this, f) as unknown as Iterator<B>
+    map<B>(f: (value: T) => B): ExactSizeIterator<B> {
+        return new Map(this as unknown as ExactSizeIterator<T>, f)
     }
 
     /**
@@ -1009,27 +1008,35 @@ class IntersperseWith<T> extends Iterator<T> {
     }
 }
 
-class Map<A, B> extends Iterator<B> {
+class Map<A, B> extends ExactSizeIterator<B> {
     #map: (value: A) => B;
-    #iter: Iterator<A>;
-    constructor(iterable: Iterator<A>, map: (value: A) => B) {
+    #iter: ExactSizeIterator<A>;
+    constructor(iterable: ExactSizeIterator<A>, map: (value: A) => B) {
         super()
         this.#iter = iterable;
         this.#map = map;
     }
 
-    override into_iter(): Iterator<B> {
+    override into_iter(): ExactSizeIterator<B> {
         this.#iter.into_iter();
         return this
     }
 
-    override clone(): Iterator<B> {
+    override clone(): ExactSizeIterator<B> {
         return new Map(this.#iter.clone(), this.#map);
     }
 
     next(): IteratorResult<B> {
         const n = this.#iter.next();
         return !n.done ? item(this.#map(n.value)) : done();
+    }
+
+    override len(): number {
+        return this.#iter.len();
+    }
+
+    override size_hint(): SizeHint<number, number> {
+        return this.#iter.size_hint();
     }
 
 }
