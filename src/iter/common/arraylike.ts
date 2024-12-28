@@ -2,7 +2,6 @@ import { is_some, Ok, Result } from "joshkaposh-option";
 import { done, item, NonZeroUsize } from "../../shared";
 import { ArrayLikeType } from "../../types";
 import { ExactSizeDoubleEndedIterator } from "../base/double-ended-iterator";
-import { Iterator } from "../base/iterator";
 
 export class ArrayLike<T> extends ExactSizeDoubleEndedIterator<T> {
     #iterable: ArrayLikeType<T>;

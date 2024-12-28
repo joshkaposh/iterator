@@ -77,8 +77,8 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new Inspect(this, fn)
     }
 
-    override map<B>(f: (value: T) => B): DoubleEndedIterator<B> {
-        return new Map(this, f)
+    override map<B>(f: (value: T) => B): ExactSizeDoubleEndedIterator<B> {
+        return new Map(this as unknown as ExactSizeDoubleEndedIterator<T>, f)
     }
 
     override map_while<B>(f: (value: T) => Option<B>): DoubleEndedIterator<B> {
@@ -663,20 +663,20 @@ class Inspect<T> extends DoubleEndedIterator<T> {
     }
 }
 
-class Map<A, B> extends DoubleEndedIterator<B> {
+class Map<A, B> extends ExactSizeDoubleEndedIterator<B> {
     #fn: (value: A) => B;
-    #iter: DoubleEndedIterator<A>;
-    constructor(iterable: DoubleEndedIterator<A>, fn: (value: A) => B) {
+    #iter: ExactSizeDoubleEndedIterator<A>;
+    constructor(iterable: ExactSizeDoubleEndedIterator<A>, fn: (value: A) => B) {
         super()
         this.#iter = iterable;
         this.#fn = fn;
     }
 
-    override clone(): DoubleEndedIterator<B> {
+    override clone(): ExactSizeDoubleEndedIterator<B> {
         return new Map(this.#iter.clone(), this.#fn)
     }
 
-    override into_iter(): DoubleEndedIterator<B> {
+    override into_iter(): ExactSizeDoubleEndedIterator<B> {
         this.#iter.into_iter();
         return this
     }
@@ -689,6 +689,14 @@ class Map<A, B> extends DoubleEndedIterator<B> {
     next_back(): IteratorResult<B> {
         const n = this.#iter.next_back();
         return !n.done ? item(this.#fn(n.value)) : done();
+    }
+
+    override len(): number {
+        return this.#iter.len();
+    }
+
+    override size_hint(): SizeHint<number, number> {
+        return this.#iter.size_hint();
     }
 }
 
@@ -1147,7 +1155,7 @@ class Take<T> extends DoubleEndedIterator<T> {
     constructor(iterable: ExactSizeDoubleEndedIterator<T>, n: number, start = n) {
         super();
         this.#iter = iterable;
-        this.#start = n;
+        this.#start = start;
         this.#n = n;
     }
 

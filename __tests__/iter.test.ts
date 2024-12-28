@@ -15,6 +15,28 @@ test('size_hint', () => {
     assert(r.len() === 3)
 })
 
+test('map keeps exact size iterator', () => {
+    const it = iter([1, 2, 3, 4, 5]);
+    const m = it.map(x => x);
+
+    assert(m.len() === it.len() && it.len() === 5);
+    m.next();
+    assert(m.len() === 4);
+    m.next();
+    assert(m.len() === 3);
+    m.next();
+    assert(m.len() === 2);
+    m.next();
+    assert(m.len() === 1);
+    m.next();
+    assert(m.len() === 0);
+    m.next();
+    assert(m.len() === 0);
+    expect(m.next()).toEqual(done());
+    expect(it.next()).toEqual(done());
+
+})
+
 test('scan', () => {
     const it = iter.of(1, 2, 3);
     const s = it.scan({ a: 0 }, (s, x) => { s.a += x; return s });
