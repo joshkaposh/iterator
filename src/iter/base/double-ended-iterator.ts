@@ -1,6 +1,6 @@
 import { assert } from "../../util";
 import { type Option, type Result, type Ok, Err, is_error, is_some, ErrorExt } from "joshkaposh-option";
-import { from_fn, Iterator } from './iterator'
+import { FlattenedInner, from_fn, Iterator } from './iterator'
 import type { DoubleEndedIteratorInputType, Item, SizeHint } from '../../types'
 import { done, NonZeroUsize, item } from "../../shared";
 import { iter } from "../index";
@@ -61,7 +61,7 @@ export abstract class DoubleEndedIterator<T> extends Iterator<T> {
         return new FilterMap(this, fn);
     }
 
-    override flatten(): DoubleEndedIterator<T> {
+    override flatten(): DoubleEndedIterator<FlattenedInner<T>> {
         return new Flatten(this as FlatType<T>)
     }
 
@@ -438,28 +438,28 @@ class FilterMap<A, B> extends DoubleEndedIterator<B> {
     }
 }
 
-class Flatten<T> extends DoubleEndedIterator<T> {
+class Flatten<T> extends DoubleEndedIterator<FlattenedInner<T>> {
     #outter: FlatType<T>;
-    #frontiter: Option<DoubleEndedIterator<T>>;
-    #backiter: Option<DoubleEndedIterator<T>>;
+    #frontiter: Option<DoubleEndedIterator<FlattenedInner<T>>>;
+    #backiter: Option<DoubleEndedIterator<FlattenedInner<T>>>;
 
-    constructor(outter: FlatType<T>, frontiter?: Option<DoubleEndedIterator<T>>, backiter?: Option<DoubleEndedIterator<T>>) {
+    constructor(outter: FlatType<T>, frontiter?: Option<DoubleEndedIterator<FlattenedInner<T>>>, backiter?: Option<DoubleEndedIterator<FlattenedInner<T>>>) {
         super()
         this.#outter = outter;
         this.#frontiter = frontiter;
         this.#backiter = backiter;
     }
 
-    override clone(): DoubleEndedIterator<T> {
+    override clone(): DoubleEndedIterator<FlattenedInner<T>> {
         return new Flatten(this.#outter.clone(), this.#frontiter?.clone(), this.#backiter?.clone())
     }
 
-    override into_iter(): DoubleEndedIterator<T> {
+    override into_iter(): DoubleEndedIterator<FlattenedInner<T>> {
         this.#outter.into_iter();
         return this;
     }
 
-    override next(): IteratorResult<T> {
+    override next(): IteratorResult<FlattenedInner<T>> {
         if (!this.#frontiter) {
             const n = this.#outter.next().value;
 
@@ -467,7 +467,7 @@ class Flatten<T> extends DoubleEndedIterator<T> {
                 return this.#backiter ? this.#backiter.next() : done()
             }
 
-            this.#frontiter = iter(n) as DoubleEndedIterator<T>;
+            this.#frontiter = iter(n) as DoubleEndedIterator<FlattenedInner<T>>;
         }
 
         const n = this.#front_loop(this.#frontiter);
@@ -483,14 +483,14 @@ class Flatten<T> extends DoubleEndedIterator<T> {
         return n
     }
 
-    override next_back(): IteratorResult<T> {
+    override next_back(): IteratorResult<FlattenedInner<T>> {
         if (!this.#backiter) {
 
             const n = this.#outter.next_back().value;
             if (!n) {
                 return this.#frontiter ? this.#frontiter.next_back() : done()
             }
-            this.#backiter = iter(n) as DoubleEndedIterator<T>;
+            this.#backiter = iter(n) as DoubleEndedIterator<FlattenedInner<T>>;
         }
 
         const n = this.#back_loop(this.#backiter);
@@ -506,7 +506,7 @@ class Flatten<T> extends DoubleEndedIterator<T> {
         return n
     }
 
-    #front_loop(it: DoubleEndedIterator<T>): IteratorResult<T> {
+    #front_loop(it: DoubleEndedIterator<FlattenedInner<T>>): IteratorResult<FlattenedInner<T>> {
         let n = it.next();
 
         if (n.done) {
@@ -516,7 +516,7 @@ class Flatten<T> extends DoubleEndedIterator<T> {
                 // outter is done
                 return done();
             } else {
-                it = iter(outter.value) as DoubleEndedIterator<T>;
+                it = iter(outter.value) as DoubleEndedIterator<FlattenedInner<T>>;
                 // just advanced outter, so return new n;
                 this.#frontiter = it;
                 return it.next()
@@ -527,7 +527,7 @@ class Flatten<T> extends DoubleEndedIterator<T> {
         }
     }
 
-    #back_loop(it: DoubleEndedIterator<T>): IteratorResult<T> {
+    #back_loop(it: DoubleEndedIterator<FlattenedInner<T>>): IteratorResult<FlattenedInner<T>> {
 
         let n = it.next_back();
 
@@ -539,7 +539,7 @@ class Flatten<T> extends DoubleEndedIterator<T> {
                 return done();
             } else {
                 // just advanced outter, so return new n;
-                this.#backiter = iter(outter.value) as DoubleEndedIterator<T>;
+                this.#backiter = iter(outter.value) as DoubleEndedIterator<FlattenedInner<T>>;
                 return this.#backiter.next_back()
             }
 

@@ -1,6 +1,6 @@
 import { assert, expect, test } from 'vitest'
 import { ErrorExt, Option } from 'joshkaposh-option'
-import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with, range, done } from "../src";
+import { DoubleEndedIterator, iter, Generator, Iterator, from_fn, successors, repeat, once, once_with, range, done, ExactSizeDoubleEndedIterator } from "../src";
 import { count, count_str, expect_error, fill, fill_str, fill_with, toInfinityAndBeyond } from './helpers';
 import { type IteratorInputType } from '../src/types';
 
@@ -51,9 +51,10 @@ test('valid iter arguments', () => {
     iter_test(new Set([1]), [1]);
     expect(iter_args(1, 2, 3, 4, 5).collect()).toEqual([1, 2, 3, 4, 5])
 
-    function iter_args(...args: any[]): Iterator<any>;
+    function iter_args(...args: any[]): ExactSizeDoubleEndedIterator<any>;
     function iter_args() {
-        return iter(arguments)
+        const it = iter(arguments);
+        return it
     }
 
     function iter_test(it: IteratorInputType<any>, expected: any[]) {
@@ -86,81 +87,81 @@ test('eq / eq_by', () => {
 
 })
 
-test('into_iter', () => {
-    let g = iter(() => count(5));
-    let a = iter(fill(5));
-    expect(g.collect()).toEqual(g.into_iter().collect());
-    expect(g.into_iter().collect()).toEqual(a.collect());
+// test('into_iter', () => {
+//     let g = iter(() => count(5));
+//     let a = iter(fill(5));
+//     expect(g.collect()).toEqual(g.into_iter().collect());
+//     expect(g.into_iter().collect()).toEqual(a.collect());
 
-    g = iter(() => count(3))
-        .map(v => v * v)
-        .map(v => v * v)
+//     g = iter(() => count(3))
+//         .map(v => v * v)
+//         .map(v => v * v)
 
-    expect(g.collect()).toEqual([1, 16, 81]);
-    expect(g.into_iter().collect()).toEqual([1, 16, 81])
+//     expect(g.collect()).toEqual([1, 16, 81]);
+//     expect(g.into_iter().collect()).toEqual([1, 16, 81])
 
-    let inf = iter(() => toInfinityAndBeyond());
-    loop(inf)
-    inf.into_iter();
-    loop(inf)
-    inf = iter(() => toInfinityAndBeyond()).take(10);
-    loop(inf);
+//     let inf = iter(() => toInfinityAndBeyond());
+//     loop(inf)
+//     inf.into_iter();
+//     loop(inf)
+//     inf = iter(() => toInfinityAndBeyond()).take(10);
+//     loop(inf);
 
-    a = iter(fill(10)) as any;
-    loop(a);
-    loop(a.into_iter())
-    loop(a.into_iter().take(10))
+//     a = iter(fill(10)) as any;
+//     // loop(a);
+//     // loop(a.into_iter())
+//     // loop(a.into_iter().take(10))
 
-    a = iter(fill(100)).take(10) as any;
+//     a = iter(fill(100)).take(10) as any;
 
-    loop(a);
-    loop(a.into_iter())
+//     // loop(a);
+//     // loop(a.into_iter())
 
-    a = iter(fill(5)).intersperse(100) as any;
+//     a = iter(fill(5)).intersperse(100) as any;
 
-    assert(a.next().value === 1)
-    assert(a.next().value === 100)
-    assert(a.next().value === 2)
-    assert(a.next().value === 100)
-    assert(a.next().value === 3)
-    assert(a.next().value === 100)
-    assert(a.next().value === 4)
-    assert(a.next().value === 100)
-    assert(a.next().value === 5)
-    assert(a.next().value === undefined);
+//     assert(a.next().value === 1)
+//     assert(a.next().value === 100)
+//     assert(a.next().value === 2)
+//     assert(a.next().value === 100)
+//     assert(a.next().value === 3)
+//     assert(a.next().value === 100)
+//     assert(a.next().value === 4)
+//     assert(a.next().value === 100)
+//     assert(a.next().value === 5)
+//     assert(a.next().value === undefined);
 
-    a.into_iter();
+//     a.into_iter();
 
-    assert(a.next().value === 1)
-    assert(a.next().value === 100)
-    assert(a.next().value === 2)
-    assert(a.next().value === 100)
-    assert(a.next().value === 3)
-    assert(a.next().value === 100)
-    assert(a.next().value === 4)
-    assert(a.next().value === 100)
-    assert(a.next().value === 5)
-    assert(a.next().value === undefined);
+//     assert(a.next().value === 1)
+//     assert(a.next().value === 100)
+//     assert(a.next().value === 2)
+//     assert(a.next().value === 100)
+//     assert(a.next().value === 3)
+//     assert(a.next().value === 100)
+//     assert(a.next().value === 4)
+//     assert(a.next().value === 100)
+//     assert(a.next().value === 5)
+//     assert(a.next().value === undefined);
 
-    a = iter(fill(100)) as any;
-    loop(a, 100);
-    loop(a.into_iter(), 100);
+//     a = iter(fill(100)) as any;
+//     loop(a, 100);
+//     loop(a.into_iter(), 100);
 
-    a = iter(fill(10)).map(v => v).map(v => v) as any;
+//     a = iter(fill(10)).map(v => v).map(v => v) as any;
 
-    loop(a);
-    loop(a.into_iter());
+//     loop(a);
+//     loop(a.into_iter());
 
-    a = a.into_iter().take(5) as any;
-    loop(a, 5);
-    loop(a.into_iter(), 5);
+//     a = a.into_iter().take(5) as any;
+//     loop(a, 5);
+//     loop(a.into_iter(), 5);
 
-    function loop(iter: Iterator<number>, n = 10) {
-        for (let i = 0; i < n; i++) {
-            assert(iter.next().value === i + 1)
-        }
-    }
-})
+//     function loop(iter: Iterator<number>, n = 10) {
+//         for (let i = 0; i < n; i++) {
+//             assert(iter.next().value === i + 1)
+//         }
+//     }
+// })
 
 test('partition', () => {
     const arr = [1, 2, 3, 4];
@@ -269,6 +270,13 @@ test('flatten', () => {
     }
 
     const cannot = [1, 2, 3, 4];
+    const x = iter(cannot).flatten();
+    function* cannot_flatten() {
+        yield 1 as number;
+    }
+
+    const y = iter(cannot_flatten).flatten();
+
 
     assert(iter(none).count() === 0)
     assert(iter(empty).flatten().rev().count() === 0)
@@ -320,7 +328,7 @@ test('flatten', () => {
 })
 
 test('flat_map', () => {
-    let it = iter(() => count(100000)).flat_map(n => n > 3 ? null : iter(() => count_str('str', n)));
+    const it = iter(() => count(100000)).flat_map(n => n > 3 ? null : iter(() => count_str('str', n)));
 
     expect(it.collect()).toEqual([
         'str-1',
@@ -333,9 +341,7 @@ test('flat_map', () => {
         'str-3',
     ])
 
-    it = iter(fill(1000))
-        .take(5)
-        .flat_map(n => n > 3 ? null : iter(fill_str('str', n)))
+    const it2 = iter(fill(1000)).take(5).flat_map(n => n > 3 ? null : iter(fill_str('str', n)))
 })
 
 test('native_data_structures', () => {

@@ -4,7 +4,7 @@ import { done, item, NonZeroUsize } from "../../shared";
 import type { IteratorInputType, Item, SizeHint, IterInputType } from '../../types';
 import type { Orderable } from "../../util";
 
-type FlatType<T> = Iterator<Iterator<T>>;
+export type FlattenedInner<T> = T extends IterInputType<T> ? Item<T> : never;
 
 export abstract class Iterator<T> {
 
@@ -183,8 +183,8 @@ export abstract class Iterator<T> {
      * @example iter(1).flatten().next() // Errors 
      * @example iter([ [1, 2, 3], [4, 5, 6] ]).flatten().rev().collect() // [6, 5, 4, 3, 2, 1];
     */
-    flatten(): Iterator<T> {
-        return new Flatten(this as unknown as Iterator<Iterator<T>>)
+    flatten(): Iterator<FlattenedInner<T>> {
+        return new Flatten(this as unknown as Iterator<Iterator<FlattenedInner<T>>>) as unknown as Iterator<FlattenedInner<T>>
     }
     /**
      * `flat_map` takes in a closure that takes in one argument `A` and returns an `Option<Iterator<B>>`.
@@ -765,9 +765,9 @@ class FilterMap<A, B> extends Iterator<B> {
 }
 
 class Flatten<T> extends Iterator<T> {
-    #outter: FlatType<T>;
-    #inner: Option<Iterator<T>>;
-    constructor(outter: FlatType<T>, inner?: Option<Iterator<T>>) {
+    #outter: Iterator<Iterator<FlattenedInner<T>>>;
+    #inner: Option<Iterator<FlattenedInner<T>>>;
+    constructor(outter: Iterator<Iterator<FlattenedInner<T>>>, inner?: Option<Iterator<FlattenedInner<T>>>) {
         super()
         this.#outter = outter;
         this.#inner = inner
@@ -782,19 +782,19 @@ class Flatten<T> extends Iterator<T> {
         return this
     }
 
-    override next(): IteratorResult<T> {
+    override next(): IteratorResult<FlattenedInner<T>> {
         if (!this.#inner) {
-            const n = this.#outter.next().value;
-            if (!n) {
+            const n = this.#outter.next();
+            if (n.done) {
                 return done()
             }
-            this.#inner = iter(n) as Iterator<T>;
+            this.#inner = iter(n.value)
         }
 
         return this.#next_loop()
     }
 
-    #next_loop(): IteratorResult<T> {
+    #next_loop(): IteratorResult<FlattenedInner<T>> {
 
         let n = this.#inner!.next();
 
