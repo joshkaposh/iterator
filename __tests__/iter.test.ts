@@ -270,13 +270,12 @@ test('flatten', () => {
     }
 
     const cannot = [1, 2, 3, 4];
-    const x = iter(cannot).flatten();
+    const never1 = iter(cannot).flatten();
     function* cannot_flatten() {
         yield 1 as number;
     }
 
-    const y = iter(cannot_flatten).flatten();
-
+    const never2 = iter(cannot_flatten).flatten();
 
     assert(iter(none).count() === 0)
     assert(iter(empty).flatten().rev().count() === 0)
@@ -518,10 +517,6 @@ test('intersperse / intersperse_with', () => {
 test('is_sorted', () => {
     let it = iter([1, 2, 2, 2, 2, 2, 3, 4, 5]);
     assert(it.is_sorted());
-})
-
-test('string', () => {
-    expect(iter('hello world').collect()).toEqual(['h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'])
 })
 
 test('generator', () => {

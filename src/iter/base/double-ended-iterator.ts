@@ -467,7 +467,7 @@ class Flatten<T> extends DoubleEndedIterator<FlattenedInner<T>> {
                 return this.#backiter ? this.#backiter.next() : done()
             }
 
-            this.#frontiter = iter(n) as DoubleEndedIterator<FlattenedInner<T>>;
+            this.#frontiter = iter(n) as unknown as DoubleEndedIterator<FlattenedInner<T>>;
         }
 
         const n = this.#front_loop(this.#frontiter);
@@ -490,7 +490,7 @@ class Flatten<T> extends DoubleEndedIterator<FlattenedInner<T>> {
             if (!n) {
                 return this.#frontiter ? this.#frontiter.next_back() : done()
             }
-            this.#backiter = iter(n) as DoubleEndedIterator<FlattenedInner<T>>;
+            this.#backiter = iter(n) as unknown as DoubleEndedIterator<FlattenedInner<T>>;
         }
 
         const n = this.#back_loop(this.#backiter);

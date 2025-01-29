@@ -3,24 +3,28 @@ import { DoubleEndedIterator, ExactSizeDoubleEndedIterator, FusedDoubleEndedIter
 import { Iterator, from_fn, FusedIterator, ExactSizeIterator } from "./base/iterator";
 import { Generator, ArrayLike, range, Range, drain, Successors, Once, OnceWith, Repeat, RepeatWith, Empty } from './common'
 import type { IterInputType, Iter, ArrayLikeType, Item, GeneratorType } from '../types'
-import { iter_type, done, item } from "../shared";
+import { done, item } from "../shared";
 import { Option } from "joshkaposh-option";
+import { StringIterator } from "./common/string";
 
 /**
  * Primary way to create an Iterator. Iterators can also be created by functions provided by the library, or classes extending `Iterator`
  * @returns Returns an Iterator 
  */
 export default function iter<It extends IterInputType<any>>(iterable: It): Iter<It> {
-    const ty = iter_type(iterable);
-    if (ty === 'iter') {
+    if (iterable instanceof Iterator) {
         return iterable as unknown as Iter<It>;
-    } else if (ty === 'arraylike') {
-        return new ArrayLike(iterable as ArrayLikeType<Item<It>>) as unknown as Iter<It>
-    } else if (ty === 'iterable') {
+    } else if (is_arraylike(iterable as any)) {
+        if (typeof iterable !== 'string') {
+            return new ArrayLike(iterable as ArrayLikeType<Item<It>>) as unknown as Iter<It>;
+        } else {
+            return new StringIterator(iterable as string) as unknown as Iter<It>;
+        }
         // @ts-expect-error
-        return new Generator(() => iterable[Symbol.iterator]()) as unknown as Iter<It>
-    } else if (ty === 'function') {
-        //! SAFETY: User ensures provided function returns an Iterator
+    } else if (iterable && (iterable[Symbol.iterator] || iterable[Symbol.asyncIterator])) {
+        // @ts-expect-error
+        return new Generator(() => iterable[Symbol.iterator]()) as unknown as Iter<It>;
+    } else if (typeof iterable === 'function') {
         return new Generator(iterable as () => GeneratorType<Item<It>>) as unknown as Iter<It>
     } else {
         const msg = is_primitive(iterable) ?
@@ -115,6 +119,7 @@ export {
 
     Generator,
     ArrayLike,
+    StringIterator,
     Range,
     Once,
     OnceWith,

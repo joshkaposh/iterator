@@ -121,30 +121,28 @@ export abstract class Iterator<T> {
      * @returns Returns true if `this` Iterator and `other` are equal.
      */
     eq(other: IterInputType<T>): boolean {
-        other = iter(other)
-        for (const val of other) {
+        const other_ = iter(other)
+        for (const val of other_) {
             const n = this.next()
             if (n.value !== val) {
                 return false
             }
         }
-        // @ts-expect-error
-        return this.size_hint()[1] === other.size_hint()[1]
+        return this.size_hint()[1] === other_.size_hint()[1]
     }
 
     /**
      * @returns Returns true if `this` Iterator and `other` are equal using the provided function.
      */
     eq_by(other: IterInputType<T>, eq: (a: T, b: T) => boolean): boolean {
-        other = iter(other);
-        for (const val of other) {
+        const other_ = iter(other);
+        for (const val of other_) {
             const n = this.next()
-            if (!eq(n.value, val)) {
+            if (!eq(n.value, val as T)) {
                 return false
             }
         }
-        // @ts-expect-error;
-        return this.next().done === other.next().done
+        return this.next().done === other_.next().done
     }
 
     /**
@@ -430,7 +428,7 @@ export abstract class Iterator<T> {
     reduce(fn: (acc: T, inc: T) => T): Option<T> {
         const n = this.next();
         if (n.done) {
-            return null;
+            return;
         }
         return this.fold(n.value, fn);
     }
@@ -764,7 +762,7 @@ class FilterMap<A, B> extends Iterator<B> {
     }
 }
 
-class Flatten<T> extends Iterator<T> {
+class Flatten<T> extends Iterator<FlattenedInner<T>> {
     #outter: Iterator<Iterator<FlattenedInner<T>>>;
     #inner: Option<Iterator<FlattenedInner<T>>>;
     constructor(outter: Iterator<Iterator<FlattenedInner<T>>>, inner?: Option<Iterator<FlattenedInner<T>>>) {
@@ -777,7 +775,7 @@ class Flatten<T> extends Iterator<T> {
         return new Flatten(this.#outter.clone(), this.#inner?.clone())
     }
 
-    override into_iter(): Iterator<T> {
+    override into_iter(): Flatten<T> {
         this.#outter.into_iter();
         return this
     }

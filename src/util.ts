@@ -56,7 +56,7 @@ export function is_primitive(value: unknown): value is Primitive {
 
 export function is_arraylike<T>(obj?: { length?: number }): obj is ArrayLike<T> {
     const ty = typeof obj
-    return ty !== 'function' && ty === 'object' && typeof obj?.length === 'number';
+    return ty === 'string' || (ty !== 'function' && ty === 'object' && typeof obj?.length === 'number');
 }
 export function unused<T>(...args: any[]): T {
     return args as T
