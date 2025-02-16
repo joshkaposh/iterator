@@ -409,7 +409,7 @@ export abstract class Iterator<T> {
      * 
      * @returns the min value found in the Iterator, using the provided compare function.
      */
-    min_by(compare: (a: T, b: T) => -1 | 0 | 1) {
+    min_by(compare: (a: T, b: T) => -1 | 0 | 1): Option<T> {
         return this.reduce((acc, x) => {
             if (compare(acc, x) === 1) {
                 acc = x;
@@ -418,10 +418,10 @@ export abstract class Iterator<T> {
         })
     }
 
-    min_by_key<K extends keyof T>(key: K) {
+    min_by_key<K extends keyof T>(key: K): Option<T> {
         const next = this.next();
         if (next.done) {
-            return done();
+            return
         }
 
         const value = next.value;
