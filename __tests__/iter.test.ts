@@ -15,6 +15,20 @@ test('size_hint', () => {
     assert(r.len() === 3)
 })
 
+test('is_sorted', () => {
+    const not_sorted = [1, 2, 3, 4, 7, 6, 8, 9];
+    const sorted = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const objs = Array.from({ length: 10 }, (_, i) => ({ someProperty: i }))
+
+
+    assert(!iter(not_sorted).is_sorted());
+    assert(iter(sorted).is_sorted());
+
+    assert(iter(objs).is_sorted_by((a, b) => a.someProperty < b.someProperty ? -1 : 1))
+    assert(iter(objs).is_sorted_by_key('someProperty'));
+
+})
+
 test('map keeps exact size iterator', () => {
     const it = iter([1, 2, 3, 4, 5]);
     const m = it.map(x => x);

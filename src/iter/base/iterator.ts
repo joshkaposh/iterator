@@ -284,18 +284,61 @@ export abstract class Iterator<T> {
      */
     is_sorted(): boolean {
         const it = this.peekable();
-        let n;
-        while (!(n = it.next()).done) {
-            const p = it.peek();
-            if (p.done) {
+        let a;
+        while (true) {
+            a = it.next();
+            const b = it.peek();
+            if (b.done) {
                 // no more comparisons to make
                 return true
             }
-            if (n.value > p.value) {
+            if (a.value > b.value) {
                 return false
             }
         }
-        return undefined as never
+    }
+
+    is_sorted_by(compare: (a: T, b: T) => -1 | 0 | 1) {
+        const it = this.peekable();
+        let a;
+        while (true) {
+            a = it.next();
+            const b = it.peek();
+            if (b.done) {
+                // no more comparisons to make
+                return true
+            }
+
+            if (compare(a.value, b.value) === 1) {
+                return false
+            }
+        }
+    }
+
+    is_sorted_by_key<K extends keyof T>(key: K) {
+        const it = this.peekable();
+        let a;
+
+        function compare(a: T, b: T) {
+            if (typeof a[key] === 'function') {
+                return a[key]() > b[key] ? 1 : -1;
+            } else {
+                return a[key] > b[key] ? 1 : -1;
+            }
+        }
+
+        while (true) {
+            a = it.next();
+            const b = it.peek();
+            if (b.done) {
+                // no more comparisons to make
+                return true
+            }
+
+            if (compare(a.value, b.value) === 1) {
+                return false
+            }
+        }
     }
 
     /**
@@ -384,7 +427,7 @@ export abstract class Iterator<T> {
         const value = next.value;
         const fold = typeof value[key] === 'function' ? (acc: T, x: T) => {
             // @ts-expect-error
-            if (x[key].call(x) < value[key].call(value)) {
+            if (x[key]() < value[key]()) {
                 acc = x;
             }
             return acc
