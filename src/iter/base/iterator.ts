@@ -344,7 +344,7 @@ export abstract class Iterator<T> {
     }
 
     /**
-     * @returns returns the max value found in the Iterator. 
+     * @returns the max value found in the Iterator. 
      */
     // @ts-expect-error
     min(): Option<Orderable<T>> {
@@ -359,6 +359,43 @@ export abstract class Iterator<T> {
 
             throw new Error(`Cannot call 'max' on an Iterator of type ${ty}. Accepted element types are 'string' or 'number'`)
         }
+    }
+
+    /**
+     * Supplied compare function must return -1 if `a < b`, 0 if equal, or 1 if `a > b`
+     * 
+     * @returns the min value found in the Iterator, using the provided compare function.
+     */
+    min_by(compare: (a: T, b: T) => -1 | 0 | 1) {
+        return this.reduce((acc, x) => {
+            if (compare(acc, x) === 1) {
+                acc = x;
+            }
+            return acc;
+        })
+    }
+
+    min_by_key<K extends keyof T>(key: K) {
+        const next = this.next();
+        if (next.done) {
+            return done();
+        }
+
+        const value = next.value;
+        const fold = typeof value[key] === 'function' ? (acc: T, x: T) => {
+            // @ts-expect-error
+            if (x[key].call(x) < value[key].call(value)) {
+                acc = x;
+            }
+            return acc
+        } : (acc: T, x: T) => {
+            if (x[key] < acc[key]) {
+                acc = x;
+            }
+            return acc;
+        }
+
+        return this.fold(value, fold)
     }
 
     /**
